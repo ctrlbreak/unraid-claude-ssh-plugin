@@ -2,7 +2,7 @@
 # =============================================================================
 # Unraid: Install the `claude-write` deploy channel
 # =============================================================================
-# Writer version: v3
+# Writer version: v4
 # Lets the read-only `claude` SSH user write specific files (hooks, plugin
 # assets) to a small set of pre-approved locations on the NAS.
 #
@@ -114,16 +114,18 @@ reject() {
     exit 1
 }
 
-# v3: plugin-name allowlist read from runtime config (was hardcoded in v2).
-# Format mirrors the filter parser exactly — both must agree on which entries
-# from allowlist.cfg are accepted. Default-deny on missing/empty/all-invalid
-# file. CLAUDE_SSH_ALLOWLIST_FILE env override is test-only; in production,
-# sudo's env_reset strips this var before the writer runs.
+# v3/v4: plugin- and container-name allowlists read from runtime config (was
+# hardcoded in v2; container kind added in v4). Format mirrors the filter
+# parser exactly — both must agree on which entries from allowlist.cfg are
+# accepted. Default-deny on missing/empty/all-invalid file.
+# CLAUDE_SSH_ALLOWLIST_FILE env override is test-only; in production, sudo's
+# env_reset strips this var before the writer runs.
 ALLOWLIST_FILE="${CLAUDE_SSH_ALLOWLIST_FILE:-/boot/config/plugins/claude-ssh/allowlist.cfg}"
 
-load_plugin_allowlist() {
+load_allowlist() {
+    local kind="$1"
     [ -f "$ALLOWLIST_FILE" ] || return 0
-    awk 'NF == 2 && $1 == "plugin" { print $2 }' "$ALLOWLIST_FILE" \
+    awk -v k="$kind" 'NF == 2 && $1 == k { print $2 }' "$ALLOWLIST_FILE" \
         | grep -xE '[a-z][a-z0-9-]{0,63}' \
         | sort -u
 }
@@ -145,33 +147,52 @@ trap on_error ERR
 CATEGORY="${1:-}"
 [ -n "$CATEGORY" ] || reject "missing category"
 
+# PLUGIN_NAME holds the second-arg value for any 3-arg category — either a
+# plugin name (plugin-* categories) or a container name (appdata-script).
+# Variable name kept for path-of-least-change; ALLOW_KIND records the
+# allowlist kind for the lookup and for the WROTE log field naming.
 PLUGIN_NAME=""
+ALLOW_KIND=""
 case "$CATEGORY" in
-    hook-sonarr|hook-radarr|scratch)
+    scratch)
         BASENAME="${2:-}"
         EXTRA="${3:-}"
         [ -n "$BASENAME" ] || reject "missing basename"
         [ -z "$EXTRA" ]    || reject "unexpected extra args"
         ;;
     plugin-page|plugin-include|plugin-script|plugin-cfg)
+        ALLOW_KIND=plugin
         PLUGIN_NAME="${2:-}"
         BASENAME="${3:-}"
         EXTRA="${4:-}"
         [ -n "$PLUGIN_NAME" ] || reject "missing plugin-name"
         [ -n "$BASENAME" ]    || reject "missing basename"
         [ -z "$EXTRA" ]       || reject "unexpected extra args"
-        # Plugin-name lookup against runtime allowlist. Default-deny: empty/
-        # missing/all-invalid config → loop body never executes → plugin_ok=0.
-        plugin_ok=0
-        for p in $(load_plugin_allowlist); do
-            if [ "$PLUGIN_NAME" = "$p" ]; then plugin_ok=1; break; fi
-        done
-        [ "$plugin_ok" -eq 1 ] || reject "plugin-name '$PLUGIN_NAME' not in allowlist"
+        ;;
+    appdata-script)
+        ALLOW_KIND=container
+        PLUGIN_NAME="${2:-}"
+        BASENAME="${3:-}"
+        EXTRA="${4:-}"
+        [ -n "$PLUGIN_NAME" ] || reject "missing container name"
+        [ -n "$BASENAME" ]    || reject "missing basename"
+        [ -z "$EXTRA" ]       || reject "unexpected extra args"
         ;;
     *)
         reject "unknown category '$CATEGORY'"
         ;;
 esac
+
+# 3-arg categories: validate the target name against its runtime allowlist.
+# Default-deny: empty/missing/all-invalid config → loop body never executes
+# → target_ok stays 0.
+if [ -n "$ALLOW_KIND" ]; then
+    target_ok=0
+    for p in $(load_allowlist "$ALLOW_KIND"); do
+        if [ "$PLUGIN_NAME" = "$p" ]; then target_ok=1; break; fi
+    done
+    [ "$target_ok" -eq 1 ] || reject "${ALLOW_KIND}-name '$PLUGIN_NAME' not in allowlist"
+fi
 
 # Basename: alphanumerics, dot, underscore, hyphen only.
 # No leading dot (no hidden files). No path separators.
@@ -185,13 +206,9 @@ fi
 # --- Category mapping ---
 # Each category resolves to: TARGET_DIR, ALLOWED_EXTS (space-separated), MODE.
 case "$CATEGORY" in
-    hook-sonarr)
-        TARGET_DIR=/mnt/user/appdata/sonarr/scripts
-        ALLOWED_EXTS="sh"
-        MODE=755
-        ;;
-    hook-radarr)
-        TARGET_DIR=/mnt/user/appdata/radarr/scripts
+    appdata-script)
+        # PLUGIN_NAME holds the container name; allowlist already validated above.
+        TARGET_DIR=/mnt/user/appdata/$PLUGIN_NAME/scripts
         ALLOWED_EXTS="sh"
         MODE=755
         ;;
@@ -304,10 +321,10 @@ TMP_DEST=""   # disarm cleanup for the moved file
 # --- Audit log ---
 HASH=$(sha256sum "$DEST" | awk '{print $1}')
 SIZE=$(stat -c %s "$DEST")
-PLUGIN_FIELD=""
-[ -n "$PLUGIN_NAME" ] && PLUGIN_FIELD=" plugin=$PLUGIN_NAME"
+TARGET_FIELD=""
+[ -n "$PLUGIN_NAME" ] && TARGET_FIELD=" ${ALLOW_KIND}=$PLUGIN_NAME"
 logger -t "$LOG_TAG" -p auth.notice \
-    "WROTE category=$CATEGORY${PLUGIN_FIELD} dest=$DEST size=$SIZE sha256=$HASH backup=${BACKUP:-none}" \
+    "WROTE category=$CATEGORY${TARGET_FIELD} dest=$DEST size=$SIZE sha256=$HASH backup=${BACKUP:-none}" \
     2>/dev/null || true
 
 # --- Confirmation to caller ---
@@ -332,9 +349,10 @@ cat > "$TMP_SUDO" << 'SUDO'
 # `*` matches one whole argument, blocking extra-args injection. The privileged
 # script re-validates everything as defence in depth.
 #
-# v7: plugin-* categories take an extra plugin-name arg (* *). Simple
-# categories (hooks, scratch) keep their 2-arg shape.
-claude ALL=(root) NOPASSWD: /usr/local/sbin/claude-write-priv hook-sonarr *, /usr/local/sbin/claude-write-priv hook-radarr *, /usr/local/sbin/claude-write-priv scratch *, /usr/local/sbin/claude-write-priv plugin-script * *, /usr/local/sbin/claude-write-priv plugin-page * *, /usr/local/sbin/claude-write-priv plugin-include * *, /usr/local/sbin/claude-write-priv plugin-cfg * *
+# v9: plugin-* and appdata-script take a 2nd-arg target (* *). The simple
+# scratch category keeps its 2-arg shape. (hook-sonarr/hook-radarr removed in
+# v9 — replaced by appdata-script <container>.)
+claude ALL=(root) NOPASSWD: /usr/local/sbin/claude-write-priv scratch *, /usr/local/sbin/claude-write-priv plugin-script * *, /usr/local/sbin/claude-write-priv plugin-page * *, /usr/local/sbin/claude-write-priv plugin-include * *, /usr/local/sbin/claude-write-priv plugin-cfg * *, /usr/local/sbin/claude-write-priv appdata-script * *
 SUDO
 
 # Validate before installing
@@ -404,30 +422,33 @@ echo "=========================================="
 echo "  claude-write deploy channel installed"
 echo "=========================================="
 echo ""
-echo "Categories (v7):"
+echo "Categories (v9):"
 echo "  Simple — claude-write <cat> <basename>:"
-echo "    hook-sonarr   -> /mnt/user/appdata/sonarr/scripts/  (.sh, 755)"
-echo "    hook-radarr   -> /mnt/user/appdata/radarr/scripts/  (.sh, 755)"
-echo "    scratch       -> /tmp/claude-scratch/               (.sh .py .txt .json .log .conf .md)"
+echo "    scratch         -> /tmp/claude-scratch/               (.sh .py .txt .json .log .conf .md)"
 echo ""
 echo "  Plugin — claude-write <cat> <plugin-name> <basename>"
-echo "    (allowlist file: /boot/config/plugins/claude-ssh/allowlist.cfg —"
-echo "     add 'plugin <name>' lines; default-deny when empty)"
-echo "    plugin-script -> /usr/local/emhttp/plugins/<plugin>/scripts/  (.py .sh, 755)"
-echo "    plugin-page   -> /usr/local/emhttp/plugins/<plugin>/          (.page, 644)"
-echo "    plugin-include-> /usr/local/emhttp/plugins/<plugin>/include/  (.php .sh)"
-echo "    plugin-cfg    -> /usr/local/emhttp/plugins/<plugin>/          (.cfg, 644)"
+echo "    (allowlist: 'plugin <name>' lines in /boot/config/plugins/claude-ssh/allowlist.cfg)"
+echo "    plugin-script   -> /usr/local/emhttp/plugins/<plugin>/scripts/  (.py .sh, 755)"
+echo "    plugin-page     -> /usr/local/emhttp/plugins/<plugin>/          (.page, 644)"
+echo "    plugin-include  -> /usr/local/emhttp/plugins/<plugin>/include/  (.php .sh)"
+echo "    plugin-cfg      -> /usr/local/emhttp/plugins/<plugin>/          (.cfg, 644)"
+echo ""
+echo "  Container — claude-write <cat> <container> <basename>"
+echo "    (allowlist: 'container <name>' lines in /boot/config/plugins/claude-ssh/allowlist.cfg)"
+echo "    appdata-script  -> /mnt/user/appdata/<container>/scripts/       (.sh, 755)"
+echo ""
+echo "Both allowlists default-deny when empty. Edit allowlist.cfg to enable."
 echo ""
 echo "Usage from a workstation:"
-echo "  cat hooks/sonarr-remove-old-torrent.sh \\"
-echo "    | ssh -i ~/.ssh/claude_unraid claude@192.168.0.3 \\"
-echo "      'claude-write hook-sonarr sonarr-remove-old-torrent.sh'"
+echo "  cat my-hook.sh \\"
+echo "    | ssh -i ~/.ssh/claude_unraid claude@nas \\"
+echo "      'claude-write appdata-script sonarr my-hook.sh'"
 echo ""
-echo "  cat plugin/src/.../TorrentHandler.page \\"
-echo "    | ssh -i ~/.ssh/claude_unraid claude@192.168.0.3 \\"
-echo "      'claude-write plugin-page torrent-handler TorrentHandler.page'"
+echo "  cat my-plugin/src/.../Foo.page \\"
+echo "    | ssh -i ~/.ssh/claude_unraid claude@nas \\"
+echo "      'claude-write plugin-page my-plugin Foo.page'"
 echo ""
 echo "Audit log:"
 echo "  grep claude-write /var/log/syslog"
 echo ""
-echo "NEXT: redeploy unraid-readonly-ssh-setup.sh (filter v7 matches writer v2)"
+echo "NEXT: redeploy unraid-readonly-ssh-setup.sh (filter v9 matches writer v4)"

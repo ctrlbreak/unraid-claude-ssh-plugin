@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.06">
+  <!ENTITY version   "2026.05.06a">
   <!ENTITY pluginURL "/boot/config/plugins/&name;/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY cfgDir    "/boot/config/plugins/&name;">
@@ -13,6 +13,20 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.06a
+- Filter v9 + writer v4: hook-sonarr/hook-radarr categories collapsed into
+  a generic appdata-script category. New 3-arg form: container name plus
+  basename, target /mnt/user/appdata/CONTAINER/scripts/. Container
+  allowlist added to allowlist.cfg as "container NAME" lines (same parser
+  and name regex as the plugin allowlist; default-deny when empty).
+  Allowlist parser is now parametric on line-prefix; filter and writer
+  both reuse it.
+- BREAKING: hook-sonarr / hook-radarr no longer accepted. Migrate to
+  "appdata-script sonarr" / "appdata-script radarr" and add the matching
+  "container" lines to allowlist.cfg.
+- exec.php counters: dropped hook-sonarr/hook-radarr rows; added appdata-script.
+- install-runtime.sh seed template extended with container examples.
+
 ###2026.05.06
 - Filter v8 + writer v3: plugin-name allowlist moved to runtime config at
   /boot/config/plugins/claude-ssh/allowlist.cfg. Default-deny when empty.

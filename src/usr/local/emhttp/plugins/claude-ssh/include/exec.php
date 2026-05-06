@@ -217,13 +217,12 @@ function buildRecentActivity() {
         'writes_total'   => 0,
         'writes_rejected'=> 0,
         'writes_per_category' => [
-            'hook-sonarr'    => 0,
-            'hook-radarr'    => 0,
             'scratch'        => 0,
             'plugin-page'    => 0,
             'plugin-include' => 0,
             'plugin-script'  => 0,
             'plugin-cfg'     => 0,
+            'appdata-script' => 0,
         ],
     ];
 

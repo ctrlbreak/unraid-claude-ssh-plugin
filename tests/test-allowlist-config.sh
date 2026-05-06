@@ -49,9 +49,10 @@ PASS=0
 FAIL=0
 FAILED=()
 
-# Run filter with a given allowlist and command. $1=expected (allow|block),
-# $2=allowlist file path (or empty for missing-file scenario), $3=plugin name
-# to test, $4=optional override basename.
+# Run filter with a given allowlist and command. $1=label, $2=expected
+# (allow|block), $3=allowlist file path (or non-existent path for missing-
+# file scenario), $4=plugin name to test, $5=optional override basename.
+# Tests the PLUGIN allowlist via `claude-write plugin-page <name> Foo.page`.
 run_case() {
     local label="$1" expected="$2" cfg_path="$3" plugin_name="$4" basename="${5:-Foo.page}"
     local cmd="claude-write plugin-page $plugin_name $basename"
@@ -66,6 +67,25 @@ run_case() {
     else
         FAIL=$((FAIL + 1))
         FAILED+=("$label: expected=$expected got=$got cfg=$cfg_path name=$plugin_name  ## $out")
+    fi
+}
+
+# Same shape, but tests the CONTAINER allowlist via
+# `claude-write appdata-script <container> foo.sh`.
+run_case_container() {
+    local label="$1" expected="$2" cfg_path="$3" container_name="$4" basename="${5:-foo.sh}"
+    local cmd="claude-write appdata-script $container_name $basename"
+    local out rc got
+    out=$(CLAUDE_SSH_ALLOWLIST_FILE="$cfg_path" \
+        SSH_ORIGINAL_COMMAND="$cmd" \
+        bash "$FILTER_TMP" 2>&1)
+    rc=$?
+    if [ "$rc" -eq 0 ]; then got="allow"; else got="block"; fi
+    if [ "$got" = "$expected" ]; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+        FAILED+=("$label: expected=$expected got=$got cfg=$cfg_path name=$container_name  ## $out")
     fi
 }
 
@@ -165,13 +185,29 @@ DUPS=$(seed_fixture dups \
     "plugin foo")
 run_case "dups-still-allowed"  allow "$DUPS" foo
 
-# === 12. Container-prefixed lines ignored by plugin parser ===
+# === 12. Cross-isolation: each parser only sees its own line-prefix ===
 CONT=$(seed_fixture container \
     "container sonarr" \
     "container radarr" \
     "plugin claude-ssh")
-run_case "container-not-plugin"  block "$CONT" sonarr
-run_case "plugin-still-allowed"  allow "$CONT" claude-ssh
+run_case "plugin-parser-ignores-container"  block "$CONT" sonarr
+run_case "plugin-parser-sees-plugin"        allow "$CONT" claude-ssh
+run_case_container "container-parser-sees-container"      allow "$CONT" sonarr
+run_case_container "container-parser-sees-container-2"    allow "$CONT" radarr
+run_case_container "container-parser-ignores-plugin"      block "$CONT" claude-ssh
+
+# v9 container-kind coverage: the parser is parametric, so a small focused
+# set of cases is enough — parser semantics are already exhaustively covered
+# above against the plugin kind.
+CONT_BASIC=$(seed_fixture container_basic \
+    "container foo" \
+    "container bar")
+run_case_container "container-basic-foo"          allow "$CONT_BASIC" foo
+run_case_container "container-basic-bar"          allow "$CONT_BASIC" bar
+run_case_container "container-basic-other"        block "$CONT_BASIC" baz
+run_case_container "container-empty-file-deny"    block "$EMPTY"      foo
+run_case_container "container-missing-file-deny"  block "$SANDBOX_DIR/nope.cfg" foo
+run_case_container "container-uppercase-dropped"  block "$(seed_fixture cont_up "container Foo")" Foo
 
 # === 13. Mixed valid + invalid → valid still pass ===
 MIXED=$(seed_fixture mixed \

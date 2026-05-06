@@ -45,10 +45,10 @@ else
     echo "  plugin version: $PLUGIN_VER"
 fi
 
-# Also confirm the filter heredoc has a v8 entry (sanity check that
+# Also confirm the filter heredoc has a v9 entry (sanity check that
 # the changelog inside the runtime filter agrees with the marker).
-if ! grep -qE '^# v8 ' "$PLUGIN_SCRIPTS/unraid-readonly-ssh-setup.sh"; then
-    echo "  FAIL: heredoc-internal v8 changelog entry missing"
+if ! grep -qE '^# v9 ' "$PLUGIN_SCRIPTS/unraid-readonly-ssh-setup.sh"; then
+    echo "  FAIL: heredoc-internal v9 changelog entry missing"
     FAIL=1
 fi
 

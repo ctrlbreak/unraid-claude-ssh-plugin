@@ -64,15 +64,16 @@ if [ ! -f "$ALLOWLIST_FILE" ]; then
     cat > "$ALLOWLIST_FILE" << 'ALLOWLIST'
 # claude-ssh allowlist — runtime config for the claude-write deploy channel.
 #
-# Controls which plugins (and, in a future release, which containers) the
-# `claude` SSH user is allowed to write into. Both the SSH filter and the
-# privileged writer read this file on every invocation; default-deny when
-# empty or malformed.
+# Controls which plugins and containers the `claude` SSH user is allowed to
+# write into. Both the SSH filter and the privileged writer read this file
+# on every invocation; default-deny when empty or malformed.
 #
 # Format:
 #   plugin <name>      Allow claude-write plugin-page/plugin-include/
 #                      plugin-script/plugin-cfg writes for /usr/local/emhttp/
 #                      plugins/<name>/.
+#   container <name>   Allow claude-write appdata-script writes for
+#                      /mnt/user/appdata/<name>/scripts/.
 #
 # Names must match: ^[a-z][a-z0-9-]{0,63}$  (lowercase, digits, hyphen)
 # Comments start with #. Blank lines ignored. Invalid entries dropped silently.
@@ -80,6 +81,8 @@ if [ ! -f "$ALLOWLIST_FILE" ]; then
 # Examples (uncomment to enable):
 # plugin torrent-handler
 # plugin claude-ssh
+# container sonarr
+# container radarr
 ALLOWLIST
     chmod 644 "$ALLOWLIST_FILE"
     log "seeded ${ALLOWLIST_FILE} (default-deny — uncomment entries to enable)"

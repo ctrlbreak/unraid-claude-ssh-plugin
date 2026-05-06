@@ -2,7 +2,7 @@
 # =============================================================================
 # Unraid: Create a read-only SSH user for Claude Code
 # =============================================================================
-# Filter version: v8
+# Filter version: v9
 # Uses authorized_keys command= restriction to force all SSH commands through
 # a filter script. Simpler and more secure than rbash — single enforcement
 # point that blocks destructive commands, dangerous flags, and shell tricks.
@@ -77,6 +77,12 @@ cat > "$FILTER_SCRIPT" << 'FILTER'
 #                   Default-deny on missing/empty/all-invalid file. Filter is
 #                   advisory; the privileged writer is the enforcer. Format:
 #                   `plugin <name>` lines, name regex ^[a-z][a-z0-9-]{0,63}$.
+# v9 — 2026-05-06: Drop hook-sonarr/hook-radarr (Sonarr/Radarr-specific names
+#                   for what was always a generic appdata-script writer).
+#                   Replace with `appdata-script <container> <basename>` →
+#                   /mnt/user/appdata/<container>/scripts/. Container allowlist
+#                   added to allowlist.cfg as `container <name>` lines. Same
+#                   default-deny + name-regex semantics as the plugin allowlist.
 # =============================================================================
 
 # Disable filename globbing during validation. Filter logic uses unquoted
@@ -113,23 +119,28 @@ XARGS_INNER="cat stat head tail grep wc ls file readlink md5sum sha256sum awk cu
 # /usr/local/sbin/claude-write-priv enforces these too (defence in depth) plus
 # basename validation. See scripts/claude-write-setup.sh.
 #
-# v7: categories split by arity.
-# Simple (2 args total: claude-write <cat> <basename>):
-#   hook-sonarr, hook-radarr, scratch
-# Plugin (3 args total: claude-write <cat> <plugin-name> <basename>):
+# Categories by arity:
+# Simple (2 args:  claude-write <cat> <basename>):
+#   scratch
+# Plugin (3 args:  claude-write <cat> <plugin-name>    <basename>):
 #   plugin-page, plugin-include, plugin-script, plugin-cfg
-CW_SIMPLE_CATEGORIES="hook-sonarr hook-radarr scratch"
+# Container (3 args: claude-write <cat> <container>    <basename>):
+#   appdata-script
+CW_SIMPLE_CATEGORIES="scratch"
 CW_PLUGIN_CATEGORIES="plugin-page plugin-include plugin-script plugin-cfg"
+CW_CONTAINER_CATEGORIES="appdata-script"
 
-# v8: plugin-name allowlist moved from hardcoded list to runtime config file.
-# Format: `plugin <name>` lines, full-line `#` comments, blank lines ignored.
-# Default-deny on missing/empty file. CLAUDE_SSH_ALLOWLIST_FILE override is
-# test-only (sshd's default AcceptEnv is empty, blocking it from live SSH).
+# v8/v9: plugin- and container-name allowlists live in a runtime config file.
+# Format: `plugin <name>` and/or `container <name>` lines, full-line `#`
+# comments, blank lines ignored. Default-deny on missing/empty file.
+# CLAUDE_SSH_ALLOWLIST_FILE override is test-only (sshd's default AcceptEnv
+# is empty, blocking it from live SSH).
 CW_ALLOWLIST_FILE="${CLAUDE_SSH_ALLOWLIST_FILE:-/boot/config/plugins/claude-ssh/allowlist.cfg}"
 
-cw_load_plugin_allowlist() {
+cw_load_allowlist() {
+    local kind="$1"
     [ -f "$CW_ALLOWLIST_FILE" ] || return 0
-    awk 'NF == 2 && $1 == "plugin" { print $2 }' "$CW_ALLOWLIST_FILE" \
+    awk -v k="$kind" 'NF == 2 && $1 == k { print $2 }' "$CW_ALLOWLIST_FILE" \
         | grep -xE '[a-z][a-z0-9-]{0,63}' \
         | sort -u
 }
@@ -282,14 +293,22 @@ for segment in "${SEGMENTS[@]}"; do
             fi
             cw_cat="${args[1]}"
 
-            # Determine category arity (or reject unknown).
+            # Determine category arity + allowlist kind (or reject unknown).
+            # cw_arity=2 (simple) | 3 (plugin or container)
+            # cw_kind=""|plugin|container — selects which allowlist to consult.
             cw_arity=0
+            cw_kind=""
             for c in $CW_SIMPLE_CATEGORIES; do
                 if [ "$cw_cat" = "$c" ]; then cw_arity=2; break; fi
             done
             if [ "$cw_arity" -eq 0 ]; then
                 for c in $CW_PLUGIN_CATEGORIES; do
-                    if [ "$cw_cat" = "$c" ]; then cw_arity=3; break; fi
+                    if [ "$cw_cat" = "$c" ]; then cw_arity=3; cw_kind=plugin; break; fi
+                done
+            fi
+            if [ "$cw_arity" -eq 0 ]; then
+                for c in $CW_CONTAINER_CATEGORIES; do
+                    if [ "$cw_cat" = "$c" ]; then cw_arity=3; cw_kind=container; break; fi
                 done
             fi
             if [ "$cw_arity" -eq 0 ]; then
@@ -304,18 +323,18 @@ for segment in "${SEGMENTS[@]}"; do
                 cw_name="${args[2]}"
             else
                 if [ "${#args[@]}" -ne 4 ]; then
-                    log_block "claude-write $cw_cat expects 2 args (plugin-name, basename)"
+                    log_block "claude-write $cw_cat expects 2 args (${cw_kind}-name, basename)"
                 fi
-                cw_plugin="${args[2]}"
+                cw_target="${args[2]}"
                 cw_name="${args[3]}"
-                # Plugin-name must be in runtime allowlist (whitelist, not pattern).
+                # Target name must be in runtime allowlist for this kind.
                 # Default-deny: empty/missing config → loop body never executes.
-                plugin_ok=0
-                for p in $(cw_load_plugin_allowlist); do
-                    if [ "$cw_plugin" = "$p" ]; then plugin_ok=1; break; fi
+                target_ok=0
+                for p in $(cw_load_allowlist "$cw_kind"); do
+                    if [ "$cw_target" = "$p" ]; then target_ok=1; break; fi
                 done
-                if [ "$plugin_ok" -eq 0 ]; then
-                    log_block "claude-write plugin-name '$cw_plugin' not in allowlist"
+                if [ "$target_ok" -eq 0 ]; then
+                    log_block "claude-write ${cw_kind}-name '$cw_target' not in allowlist"
                 fi
             fi
 

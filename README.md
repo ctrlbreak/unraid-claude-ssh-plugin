@@ -1,7 +1,7 @@
 # claude-ssh — Unraid plugin
 
-Packages the `claude` SSH user, filter v8, and `claude-write` deploy channel
-(writer v3) into a single Unraid plugin. Replaces the manual two-script
+Packages the `claude` SSH user, filter v9, and `claude-write` deploy channel
+(writer v4) into a single Unraid plugin. Replaces the manual two-script
 install flow with one `.plg` URL, plus a Settings/Status tab for visibility
 into filter version, recent activity, and audit logs.
 
@@ -24,52 +24,89 @@ hooks are managed by the plugin so there's a single source of truth.
 
 ## Versions
 
-- **Plugin:** `2026.05.06` (date-based, single source in `claude-ssh.plg`)
-- **Filter:** `v8` — parsed from a `# Filter version:` comment in the setup script
-- **Writer:** `v3` — parsed from a `# Writer version:` comment in the setup script
+- **Plugin:** `2026.05.06a` (date-based, single source in `claude-ssh.plg`)
+- **Filter:** `v9` — parsed from a `# Filter version:` comment in the setup script
+- **Writer:** `v4` — parsed from a `# Writer version:` comment in the setup script
 
 Bumping plugin version: edit one entity in `claude-ssh.plg`. Bumping filter or
 writer version: edit the comment + the relevant logic, then bump plugin version
 too. The Status page surfaces all three.
 
-## Plugin-name allowlist (v8)
+## Categories (v9)
 
-The plugin-* categories (`plugin-page`, `plugin-include`, `plugin-script`,
-`plugin-cfg`) require a plugin-name argument:
+### Simple
+
+- `claude-write scratch <basename>` → `/tmp/claude-scratch/` (.sh .py .txt
+  .json .log .conf .md, ephemeral, no backups)
+
+### Plugin (3-arg, gated by plugin allowlist)
 
 ```
-claude-write plugin-page <plugin-name> <basename>
+claude-write plugin-page    <plugin-name> <basename>   → /usr/local/emhttp/plugins/<plugin>/
+claude-write plugin-include <plugin-name> <basename>   → /usr/local/emhttp/plugins/<plugin>/include/
+claude-write plugin-script  <plugin-name> <basename>   → /usr/local/emhttp/plugins/<plugin>/scripts/
+claude-write plugin-cfg     <plugin-name> <basename>   → /usr/local/emhttp/plugins/<plugin>/
 ```
 
-The list of allowed plugin-names is configured at runtime via:
+### Container (3-arg, gated by container allowlist) — v9
+
+```
+claude-write appdata-script <container> <basename>     → /mnt/user/appdata/<container>/scripts/
+```
+
+Replaces v7's `hook-sonarr` / `hook-radarr` categories with one generic
+form. Useful for any *arr-style app: Sonarr, Radarr, Bazarr, Lidarr,
+Prowlarr, Tdarr, autobrr, and the long tail of containers that keep their
+hooks under `/mnt/user/appdata/<container>/scripts/`.
+
+## Runtime allowlist
+
+Both 3-arg category families are gated by entries in:
 
 ```
 /boot/config/plugins/claude-ssh/allowlist.cfg
 ```
 
-Format: one `plugin <name>` line per allowed plugin. Comments start with `#`;
-blank lines ignored. Names must match `^[a-z][a-z0-9-]{0,63}$`. Example:
+Format:
 
 ```
 # claude-ssh allowlist
 plugin torrent-handler
 plugin claude-ssh
+container sonarr
+container radarr
 ```
 
-**Default-deny:** if the file is missing, empty, or contains no valid entries,
-all `plugin-*` writes are rejected. The plugin seeds a commented template on
-first install; existing files are never overwritten.
+Comments start with `#`; blank lines ignored. Names must match
+`^[a-z][a-z0-9-]{0,63}$`. Invalid entries silently dropped.
 
-The filter and the privileged writer both read this file on every invocation.
-The filter is advisory (early rejection at the SSH layer); the writer is the
-enforcer (defence in depth — a stale filter cache can't bypass the writer).
+**Default-deny:** if the file is missing, empty, or contains no valid
+entries of the relevant kind, the corresponding writes are rejected. The
+plugin seeds a commented template on first install; existing files are
+never overwritten.
 
-## Other categories (v7, unchanged)
+The filter and the privileged writer both read this file on every
+invocation. The filter is advisory (early rejection at the SSH layer); the
+writer is the enforcer (defence in depth — a stale filter cache can't
+bypass the writer). Both reuse the same parametric parser, so plugin and
+container parsing stay in lockstep.
 
-- `claude-write hook-sonarr <basename>` → `/mnt/user/appdata/sonarr/scripts/`
-- `claude-write hook-radarr <basename>` → `/mnt/user/appdata/radarr/scripts/`
-- `claude-write scratch <basename>` → `/tmp/claude-scratch/`
-  (`.sh .py .txt .json .log .conf .md`, ephemeral, no backups)
+## Migrating from filter v7 / v8 (`hook-sonarr` / `hook-radarr`)
+
+If you were using the legacy hook categories:
+
+```
+# Old (v7 / v8)
+ssh claude@nas 'claude-write hook-sonarr foo.sh' < foo.sh
+ssh claude@nas 'claude-write hook-radarr foo.sh' < foo.sh
+
+# New (v9)
+ssh claude@nas 'claude-write appdata-script sonarr foo.sh' < foo.sh
+ssh claude@nas 'claude-write appdata-script radarr foo.sh' < foo.sh
+```
+
+Add `container sonarr` / `container radarr` (or whichever you need) to
+`/boot/config/plugins/claude-ssh/allowlist.cfg`.
 
 ## Build & deploy
 
