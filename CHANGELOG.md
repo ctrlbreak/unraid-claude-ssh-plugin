@@ -1,0 +1,82 @@
+# Changelog
+
+Mirror of the `<CHANGES>` block in `claude-ssh.plg`. The `.plg` is the
+canonical source — this file is for readability and git-friendly diffs.
+
+Format: each section is a plugin version. Plugin versions are date-based
+(`YYYY.MM.DD[a-z]`) — the suffix increments when multiple releases happen on
+the same day. The filter and writer have independent version markers
+(see [docs/upgrading.md](docs/upgrading.md)).
+
+## 2026.05.06c — 2026-05-06
+
+- Configurable SSH username (setup-time only). Setup scripts read
+  `CLAUDE_SSH_USERNAME` from env or `/boot/config/plugins/claude-ssh/username`
+  (single-line file), defaulting to `claude`. Validated against
+  `^[a-z][a-z0-9-]{0,31}$`. Existing installs unaffected — defaults match
+  prior behaviour.
+- `install-runtime.sh` resolves the username, exports it for child setup
+  scripts, and seeds the persisted file on first install (never overwritten,
+  so explicit user choice survives upgrades).
+- `claude-write-setup.sh` substitutes the resolved username into the sudoers
+  principal so a non-default SSH user receives the matching grants.
+- `exec.php` derives `/home/<user>/` paths and the `/etc/passwd` existence
+  check from the same source. Status payload exposes the configured username
+  so the Settings page surfaces it on the Health KPI.
+- New `test-username-configurable.sh` (32 cases) — drift check across the
+  four shell scripts, env/file/default precedence, validation rejects,
+  sudoers principal parameterisation, install-runtime seeding.
+
+## 2026.05.06b — 2026-05-06
+
+- Settings UI: Allowlist editor on the Settings/Status tab. Two textareas for
+  plugin and container names, Save and Reload buttons, status pane.
+  Server-side validation against the same name regex used by the filter and
+  writer. Atomic write to `allowlist.cfg` via temp-file plus rename. Header
+  comment block is regenerated on every save (manual edits to comments and
+  unrelated lines are not preserved through the UI).
+- `exec.php`: new `load_allowlist` and `save_allowlist` routes; helper
+  functions `load_allowlist_file` and `save_allowlist_file` are also callable
+  directly from PHP CLI for tests (dispatcher early-returns under cli SAPI).
+- New `test-settings-save.sh` exercises the save/load round-trip with a
+  35-case sandbox suite (skips if php is not installed).
+- `test-claude-write-validation.sh` extended to assert `exec.php` uses the
+  same allowlist path default, env-var override, and name regex as the
+  shell side.
+
+## 2026.05.06a — 2026-05-06
+
+- **Filter v9 + writer v4:** `hook-sonarr` / `hook-radarr` categories
+  collapsed into a generic `appdata-script` category. New 3-arg form:
+  container name plus basename, target
+  `/mnt/user/appdata/<container>/scripts/`. Container allowlist added to
+  `allowlist.cfg` as `container <name>` lines (same parser and name regex
+  as the plugin allowlist; default-deny when empty). Allowlist parser is
+  now parametric on line-prefix; filter and writer both reuse it.
+- **BREAKING:** `hook-sonarr` / `hook-radarr` no longer accepted. Migrate to
+  `appdata-script sonarr` / `appdata-script radarr` and add the matching
+  `container` lines to `allowlist.cfg`.
+- `exec.php` counters: dropped `hook-sonarr` / `hook-radarr` rows; added
+  `appdata-script`.
+- `install-runtime.sh` seed template extended with container examples.
+
+## 2026.05.06 — 2026-05-06
+
+- **Filter v8 + writer v3:** plugin-name allowlist moved to runtime config at
+  `/boot/config/plugins/claude-ssh/allowlist.cfg`. Default-deny when empty.
+- `install-runtime.sh` seeds a commented-template `allowlist.cfg` on first
+  install (existing files never overwritten).
+- New tests: `test-allowlist-config.sh` (parser behaviour) +
+  `test-boot-config-write-block.sh` (filter blocks writes to `/boot/config/`).
+
+## 2026.05.04 — 2026-05-04
+
+- Initial release: packages claude SSH filter v7 + claude-write writer v2.
+- Single-tab Status page with collapsible Audit Log section.
+- Dashboard tile showing filter version + 24h activity.
+- Filter v7: plugin-name parameterised plugin-* categories, new `scratch`
+  category.
+- Idempotent install/upgrade — re-runs setup scripts, single
+  `/boot/config/go` entry.
+- Non-destructive uninstall — preserves `/home/claude/`, backups, user
+  account.

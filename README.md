@@ -165,6 +165,38 @@ ssh claude@nas 'claude-write appdata-script radarr foo.sh' < foo.sh
 Add `container sonarr` / `container radarr` (or whichever you need) to
 `/boot/config/plugins/claude-ssh/allowlist.cfg`.
 
+## Documentation
+
+Topic-specific docs live under [`docs/`](docs/):
+
+- [`install.md`](docs/install.md) — Step-by-step install via the Unraid
+  web UI or shell, plus what gets laid down where.
+- [`categories.md`](docs/categories.md) — Full reference for every
+  `claude-write` category: argv shape, target dir, allowed extensions,
+  allowlist gate, worked examples.
+- [`threat-model.md`](docs/threat-model.md) — What this plugin protects
+  against, what it does NOT protect against, defence-in-depth diagram.
+  **Read this before granting any SSH key.**
+- [`wire-protocol.md`](docs/wire-protocol.md) — Argv shapes, validation
+  regex, exit codes, syslog format. The contract surface for clients.
+- [`upgrading.md`](docs/upgrading.md) — Upgrade flow, what's preserved,
+  rollback procedure, migration from v7/v8 and from manual install.
+- [`troubleshooting.md`](docs/troubleshooting.md) — The most common
+  failures, with symptoms and fixes.
+
+Sample client + allowlist:
+
+- [`examples/deploy-via-claude-write.sh`](examples/deploy-via-claude-write.sh)
+  — 30-line bash client demonstrating the four common categories.
+- [`examples/allowlist.cfg.example`](examples/allowlist.cfg.example) — A
+  populated allowlist showing the format.
+
+Project meta:
+
+- [`CHANGELOG.md`](CHANGELOG.md) — Per-release changes (mirrors `.plg`'s
+  `<CHANGES>` block).
+- [`SECURITY.md`](SECURITY.md) — How to report a vulnerability.
+
 ## Build & deploy
 
 ```bash
@@ -215,7 +247,13 @@ claude-ssh.plg              # Plugin manifest, version entity, install/remove ho
 Makefile                    # tar cJf → claude-ssh.txz, plus `make test`
 deploy.sh                   # quick (claude-write) + --full (plugin install) modes
 tests/                      # Local lint / build / regression / idempotency suite
+docs/                       # Topic-specific docs (install, categories, threat-model, ...)
+examples/                   # Sample client + allowlist
+.github/                    # Issue templates, security advisory contact
 README.md                   # This file
+CHANGELOG.md                # Per-release changes (mirror of <CHANGES> in .plg)
+SECURITY.md                 # Vulnerability reporting policy
+CLAUDE.md                   # Agent working rules + active invariants
 src/usr/local/emhttp/plugins/claude-ssh/
 ├── ClaudeSsh.page                  # Settings tab (Health + Allowlist editor + Status + Audit Log)
 ├── ClaudeSshDashboard.page         # Dashboard tile

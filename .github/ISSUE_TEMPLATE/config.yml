@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/<owner>/claude-ssh-plugin/security/advisories/new
+    about: |
+      Please report security issues privately via GitHub Security Advisories,
+      NOT as a public issue. The advisories tab is the right place for any
+      report involving sandbox escape, allowlist bypass, privilege escalation,
+      or anything else that would let an SSH-key holder do more than the
+      threat model describes.
