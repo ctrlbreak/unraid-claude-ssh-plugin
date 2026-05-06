@@ -1,0 +1,54 @@
+Menu="Dashboard"
+Icon="key"
+---
+<?php
+$plugin = 'claude-ssh';
+?>
+
+<style>
+.cs-tile-content { padding: 8px 0; text-align: center; }
+.cs-tile-line { font-size: 1.0em; font-weight: bold; }
+.cs-tile-sub  { font-size: 0.85em; color: var(--text-secondary, #888); margin-top: 4px; }
+.cs-tile-green  { color: #27ae60; }
+.cs-tile-amber  { color: #f39c12; }
+.cs-tile-red    { color: #e74c3c; }
+</style>
+
+<div class="tile-header">
+  <a href="/Utilities/ClaudeSsh" title="Claude SSH plugin status">
+    <i class="fa fa-key"></i>
+    <span>Claude SSH</span>
+    <i class="fa fa-cog"></i>
+  </a>
+</div>
+
+<div class="cs-tile-content" id="cs-tile-content">
+  <div class="cs-tile-line">…</div>
+  <div class="cs-tile-sub">loading</div>
+</div>
+
+<script>
+(function() {
+  var plugin = '<?=$plugin?>';
+
+  function load() {
+    $.post('/plugins/' + plugin + '/include/exec.php', { action: 'dashboard' }, function(data) {
+      var color = 'cs-tile-' + (data.color || 'grey');
+      var line, sub;
+      if (!data.healthy) {
+        line = 'Not installed';
+        sub = 'open the plugin page to investigate';
+      } else {
+        line = 'Filter ' + (data.filter_version || '?');
+        sub = (data.writes_24h || 0) + ' writes · ' + (data.blocked_24h || 0) + ' blocked (24h)';
+      }
+      var el = document.getElementById('cs-tile-content');
+      el.innerHTML = '<div class="cs-tile-line ' + color + '">' + line + '</div>'
+                   + '<div class="cs-tile-sub">' + sub + '</div>';
+    }, 'json');
+  }
+
+  load();
+  setInterval(load, 60000);
+})();
+</script>

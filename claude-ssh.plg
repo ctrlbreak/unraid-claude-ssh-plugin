@@ -1,0 +1,87 @@
+<?xml version='1.0' standalone='yes'?>
+
+<!DOCTYPE PLUGIN [
+  <!ENTITY name      "claude-ssh">
+  <!ENTITY author    "Patrick">
+  <!ENTITY version   "2026.05.04">
+  <!ENTITY pluginURL "/boot/config/plugins/&name;/&name;.plg">
+  <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
+  <!ENTITY cfgDir    "/boot/config/plugins/&name;">
+  <!ENTITY emhttpDir "/usr/local/emhttp/plugins/&name;">
+]>
+
+<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
+
+<CHANGES>
+###2026.05.04
+- Initial release: packages claude SSH filter v7 + claude-write writer v2
+- Single-tab Status page with collapsible Audit Log section
+- Dashboard tile showing filter version + 24h activity
+- Filter v7: plugin-name parameterised plugin-* categories, new scratch category
+- Idempotent install/upgrade — re-runs setup scripts, single /boot/config/go entry
+- Non-destructive uninstall — preserves /home/claude/, backups, user account
+</CHANGES>
+
+<!--
+Install / upgrade script. The .txz extracts the plugin tree to
+/usr/local/emhttp/plugins/claude-ssh/, then install-runtime.sh runs the
+filter + writer setup scripts and registers the boot hook.
+-->
+<FILE Run="/bin/bash">
+<INLINE>
+#!/bin/bash
+
+PLUGIN="claude-ssh"
+CFG_DIR="/boot/config/plugins/${PLUGIN}"
+
+echo "Installing ${PLUGIN}..."
+
+# Create config directory on flash (preserves user state across upgrades)
+mkdir -p "${CFG_DIR}"
+
+# Install or upgrade the package. --reinstall ensures all files in the .txz
+# overwrite the previous version cleanly (without it, identical paths from
+# older versions can stick around).
+upgradepkg --install-new --reinstall "&pkgURL;"
+
+# Run the runtime installer: deploys the SSH filter + claude-write writer
+# and registers the boot hook in /boot/config/go.
+bash "&emhttpDir;/scripts/install-runtime.sh"
+
+echo "${PLUGIN} installed."
+</INLINE>
+</FILE>
+
+<!--
+Remove script. Non-destructive: tears down runtime artifacts (sudoers, sshd
+config additions, claude-write binaries, /boot/config/go hook) but leaves
+/home/claude/, the claude user, and the backup directory intact.
+-->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+#!/bin/bash
+
+PLUGIN="claude-ssh"
+echo "Removing ${PLUGIN}..."
+
+# Run uninstall-runtime.sh BEFORE removepkg — needs the script to exist.
+if [ -x "/usr/local/emhttp/plugins/${PLUGIN}/scripts/uninstall-runtime.sh" ]; then
+    bash "/usr/local/emhttp/plugins/${PLUGIN}/scripts/uninstall-runtime.sh"
+fi
+
+# Remove the package. Config dir on flash is preserved.
+removepkg "${PLUGIN}"
+
+echo "${PLUGIN} removed. Config preserved at /boot/config/plugins/${PLUGIN}/"
+echo "To fully purge: userdel claude &amp;&amp; rm -rf /home/claude /mnt/cache/appdata/claude-write-backups"
+</INLINE>
+</FILE>
+
+<!--
+Package file (pre-built .txz placed alongside .plg on flash)
+-->
+<FILE Name="&pkgURL;">
+<URL>&pkgURL;</URL>
+</FILE>
+
+</PLUGIN>

@@ -1,0 +1,312 @@
+Menu="Utilities"
+Title="Claude SSH"
+Icon="key"
+Tag="key"
+---
+<?php
+$plugin = 'claude-ssh';
+?>
+
+<style>
+.cs-card-section { margin-bottom: 28px; }
+.cs-card-section h3 {
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border, #ddd);
+}
+.cs-summary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.cs-kpi {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-left: 4px solid #ccc;
+  border-radius: 4px;
+  padding: 12px 16px;
+  flex: 1 1 180px;
+  min-width: 180px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.cs-kpi-label { font-size: 0.85em; color: var(--text-secondary, #888); text-transform: uppercase; letter-spacing: 0.5px; }
+.cs-kpi-value { font-size: 1.4em; font-weight: bold; margin-top: 4px; }
+.cs-kpi-green  { border-left-color: #27ae60; color: #27ae60; }
+.cs-kpi-amber  { border-left-color: #f39c12; color: #f39c12; }
+.cs-kpi-red    { border-left-color: #e74c3c; color: #e74c3c; }
+.cs-kpi-grey   { border-left-color: #95a5a6; color: #95a5a6; }
+
+.cs-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 0.78em;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+.cs-pill-green { background: #27ae60; }
+.cs-pill-amber { background: #f39c12; }
+.cs-pill-red   { background: #e74c3c; }
+.cs-pill-grey  { background: #95a5a6; }
+
+table.cs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+table.cs-table th, table.cs-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border, #eee);
+  text-align: left;
+}
+table.cs-table th { font-weight: 600; color: var(--text-secondary, #555); background: #fafafa; }
+table.cs-table td.cs-mono { font-family: monospace; font-size: 0.9em; word-break: break-all; }
+table.cs-table tr.cs-row-missing { background: #fdecec; }
+
+.cs-toggle {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cs-toggle .cs-chev { transition: transform 0.15s; }
+.cs-toggle.cs-open .cs-chev { transform: rotate(90deg); }
+.cs-collapsible {
+  display: none;
+  margin-top: 12px;
+}
+.cs-collapsible.cs-open { display: block; }
+
+.cs-log-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.cs-log-controls select { padding: 4px 8px; }
+.cs-log-pre {
+  background: #1a1a1a;
+  color: #d4d4d4;
+  padding: 12px;
+  font-family: monospace;
+  font-size: 0.82em;
+  line-height: 1.4;
+  border-radius: 4px;
+  max-height: 480px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.cs-log-empty { color: #888; font-style: italic; padding: 16px; text-align: center; }
+</style>
+
+<div class="cs-card-section">
+  <h3>Health</h3>
+  <div class="cs-summary" id="cs-summary"></div>
+  <div id="cs-versions" style="font-size: 0.9em; color: var(--text-secondary, #888); margin-top: 4px;"></div>
+</div>
+
+<div class="cs-card-section">
+  <h3>System state</h3>
+  <table class="cs-table" id="cs-files">
+    <thead>
+      <tr><th>File</th><th>Path</th><th>Size</th><th>Modified</th><th>SHA-256</th></tr>
+    </thead>
+    <tbody><tr><td colspan="5">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<div class="cs-card-section">
+  <h3>Recent activity (24 hours)</h3>
+  <div class="cs-summary" id="cs-activity"></div>
+  <table class="cs-table" id="cs-writes" style="margin-top: 12px;">
+    <thead><tr><th>claude-write category</th><th>Writes</th></tr></thead>
+    <tbody><tr><td colspan="2">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<div class="cs-card-section">
+  <h3 class="cs-toggle" id="cs-audit-toggle">
+    <i class="fa fa-chevron-right cs-chev"></i>
+    <span>Audit log</span>
+  </h3>
+  <div class="cs-collapsible" id="cs-audit-panel">
+    <div class="cs-log-controls">
+      <label>Date:
+        <select id="cs-audit-date">
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="7days">Last 7 days</option>
+        </select>
+      </label>
+      <label>Tag:
+        <select id="cs-audit-tag">
+          <option value="all">All</option>
+          <option value="claude-shell">claude-shell (filter)</option>
+          <option value="claude-write">claude-write (writes)</option>
+          <option value="sudo">sudo (elevation)</option>
+        </select>
+      </label>
+      <button id="cs-audit-refresh" class="btn">Refresh</button>
+    </div>
+    <pre class="cs-log-pre" id="cs-audit-output"><span class="cs-log-empty">Open the panel to load.</span></pre>
+  </div>
+</div>
+
+<script>
+(function() {
+  var plugin = '<?=$plugin?>';
+  var endpoint = '/plugins/' + plugin + '/include/exec.php';
+  var pollHandle = null;
+
+  function byId(id) { return document.getElementById(id); }
+  function fmtBytes(n) {
+    if (n === null || n === undefined) return '-';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+  function fmtTs(s) {
+    if (!s) return '-';
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    return d.toLocaleString();
+  }
+
+  function renderSummary(data) {
+    var h = data.health || {};
+    var kpis = [
+      { label: 'User claude',       ok: h.user_exists },
+      { label: 'Filter',            ok: h.filter_installed,  detail: data.filter_version },
+      { label: 'Writer',            ok: h.priv_installed && h.wrapper_installed, detail: data.writer_version },
+      { label: 'Sudoers',           ok: h.sudoers_installed },
+      { label: 'SSH keys',          ok: (data.ssh_key_count || 0) > 0, detail: (data.ssh_key_count || 0) + ' key' + (data.ssh_key_count === 1 ? '' : 's') },
+    ];
+    var html = kpis.map(function(k) {
+      var cls = k.ok ? 'cs-kpi-green' : 'cs-kpi-red';
+      var val = k.ok ? '✓' : '✗';
+      var detail = k.detail ? '<div class="cs-kpi-label" style="margin-top:4px">' + k.detail + '</div>' : '';
+      return '<div class="cs-kpi ' + cls + '">'
+           +   '<div class="cs-kpi-label">' + k.label + '</div>'
+           +   '<div class="cs-kpi-value">' + val + '</div>'
+           +   detail
+           + '</div>';
+    }).join('');
+    byId('cs-summary').innerHTML = html;
+
+    var versionLine = 'Plugin ' + (data.plugin_version || '?')
+                    + ' · Filter ' + (data.filter_version || '?')
+                    + ' · Writer ' + (data.writer_version || '?');
+    byId('cs-versions').textContent = versionLine;
+  }
+
+  function renderFiles(data) {
+    var files = (data && data.files) || {};
+    var labels = {
+      filter:              'Filter (runtime)',
+      writer_wrapper:      'claude-write wrapper',
+      writer_priv:         'claude-write-priv',
+      sudoers:             'Sudoers fragment',
+      authorized_keys:     'authorized_keys',
+      source_filter_setup: 'Filter setup (source)',
+      source_writer_setup: 'Writer setup (source)',
+    };
+    var rows = Object.keys(labels).map(function(k) {
+      var f = files[k] || {};
+      if (!f.exists) {
+        return '<tr class="cs-row-missing">'
+             +   '<td>' + labels[k] + '</td>'
+             +   '<td colspan="4"><em>not found</em></td>'
+             + '</tr>';
+      }
+      var sha = f.sha256 ? f.sha256.substring(0, 16) + '…' : '-';
+      return '<tr>'
+           +   '<td>' + labels[k] + '</td>'
+           +   '<td class="cs-mono">' + (f.path || '') + '</td>'
+           +   '<td>' + fmtBytes(f.size) + '</td>'
+           +   '<td>' + fmtTs(f.mtime) + '</td>'
+           +   '<td class="cs-mono" title="' + (f.sha256 || '') + '">' + sha + '</td>'
+           + '</tr>';
+    }).join('');
+    byId('cs-files').querySelector('tbody').innerHTML = rows;
+  }
+
+  function renderActivity(data) {
+    var kpis = [
+      { label: 'Commands accepted', value: data.filter_recv,    color: 'cs-kpi-green' },
+      { label: 'Commands blocked',  value: data.filter_blocked, color: data.filter_blocked > 0 ? 'cs-kpi-amber' : 'cs-kpi-grey' },
+      { label: 'Writes (total)',    value: data.writes_total,   color: 'cs-kpi-green' },
+      { label: 'Writes rejected',   value: data.writes_rejected,color: data.writes_rejected > 0 ? 'cs-kpi-red' : 'cs-kpi-grey' },
+    ];
+    byId('cs-activity').innerHTML = kpis.map(function(k) {
+      return '<div class="cs-kpi ' + k.color + '">'
+           +   '<div class="cs-kpi-label">' + k.label + '</div>'
+           +   '<div class="cs-kpi-value">' + (k.value || 0) + '</div>'
+           + '</div>';
+    }).join('');
+
+    var cats = data.writes_per_category || {};
+    var rows = Object.keys(cats).map(function(c) {
+      return '<tr><td>' + c + '</td><td>' + cats[c] + '</td></tr>';
+    }).join('');
+    byId('cs-writes').querySelector('tbody').innerHTML = rows || '<tr><td colspan="2"><em>no writes</em></td></tr>';
+  }
+
+  function renderAuditLog(data) {
+    if (!data || !data.lines || data.lines.length === 0) {
+      byId('cs-audit-output').innerHTML = '<span class="cs-log-empty">No matching log entries.</span>';
+      return;
+    }
+    var text = data.lines.map(function(l) { return l.raw; }).join('\n');
+    byId('cs-audit-output').textContent = text;
+  }
+
+  function loadAll() {
+    $.post(endpoint, { action: 'status' },          renderSummary,  'json');
+    $.post(endpoint, { action: 'system_state' },    renderFiles,    'json');
+    $.post(endpoint, { action: 'recent_activity' }, renderActivity, 'json');
+  }
+
+  function loadAudit() {
+    var date = byId('cs-audit-date').value;
+    var tag  = byId('cs-audit-tag').value;
+    byId('cs-audit-output').innerHTML = '<span class="cs-log-empty">Loading...</span>';
+    $.post(endpoint, { action: 'audit_log', date_filter: date, tag_filter: tag, max_lines: 500 }, renderAuditLog, 'json');
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollHandle = setInterval(loadAll, 30000);
+  }
+  function stopPolling() {
+    if (pollHandle) { clearInterval(pollHandle); pollHandle = null; }
+  }
+
+  // Audit panel collapsible behaviour
+  byId('cs-audit-toggle').addEventListener('click', function() {
+    var t = byId('cs-audit-toggle');
+    var p = byId('cs-audit-panel');
+    var open = !t.classList.contains('cs-open');
+    t.classList.toggle('cs-open', open);
+    p.classList.toggle('cs-open', open);
+    if (open) loadAudit();
+  });
+  byId('cs-audit-refresh').addEventListener('click', loadAudit);
+  byId('cs-audit-date').addEventListener('change', loadAudit);
+  byId('cs-audit-tag').addEventListener('change', loadAudit);
+
+  // Refresh on tab activation, pause when hidden
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) stopPolling();
+    else { loadAll(); startPolling(); }
+  });
+
+  loadAll();
+  startPolling();
+})();
+</script>
