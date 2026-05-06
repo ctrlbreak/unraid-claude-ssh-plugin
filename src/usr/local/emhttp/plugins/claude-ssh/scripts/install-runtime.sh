@@ -49,6 +49,42 @@ fi
 log "running claude-write-setup.sh"
 bash "${SCRIPTS_DIR}/claude-write-setup.sh"
 
+# --- 2.5. Bootstrap allowlist.cfg (runtime config for plugin-name allowlist) ---
+# Default-deny is the design: no plugin-* writes succeed until the user adds
+# an entry. We seed a commented template on first install so the file exists
+# and shows the format. Existing files are NEVER overwritten — preserves any
+# entries the user has populated via Settings UI or by editing directly.
+ALLOWLIST_DIR="/boot/config/plugins/claude-ssh"
+ALLOWLIST_FILE="${ALLOWLIST_DIR}/allowlist.cfg"
+if [ ! -d "$ALLOWLIST_DIR" ]; then
+    mkdir -p "$ALLOWLIST_DIR"
+    log "created ${ALLOWLIST_DIR}"
+fi
+if [ ! -f "$ALLOWLIST_FILE" ]; then
+    cat > "$ALLOWLIST_FILE" << 'ALLOWLIST'
+# claude-ssh allowlist — runtime config for the claude-write deploy channel.
+#
+# Controls which plugins (and, in a future release, which containers) the
+# `claude` SSH user is allowed to write into. Both the SSH filter and the
+# privileged writer read this file on every invocation; default-deny when
+# empty or malformed.
+#
+# Format:
+#   plugin <name>      Allow claude-write plugin-page/plugin-include/
+#                      plugin-script/plugin-cfg writes for /usr/local/emhttp/
+#                      plugins/<name>/.
+#
+# Names must match: ^[a-z][a-z0-9-]{0,63}$  (lowercase, digits, hyphen)
+# Comments start with #. Blank lines ignored. Invalid entries dropped silently.
+#
+# Examples (uncomment to enable):
+# plugin torrent-handler
+# plugin claude-ssh
+ALLOWLIST
+    chmod 644 "$ALLOWLIST_FILE"
+    log "seeded ${ALLOWLIST_FILE} (default-deny — uncomment entries to enable)"
+fi
+
 # --- 3. Boot hook in /boot/config/go ---
 # Single entry that re-runs this installer on every boot. The setup scripts
 # are idempotent so re-running is cheap (~few seconds), and this avoids the

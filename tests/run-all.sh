@@ -13,6 +13,8 @@ TESTS=(
     test-build.sh
     test-filter-regression.sh
     test-claude-write-validation.sh
+    test-allowlist-config.sh
+    test-boot-config-write-block.sh
     test-idempotency.sh
     test-migration.sh
     test-versions.sh

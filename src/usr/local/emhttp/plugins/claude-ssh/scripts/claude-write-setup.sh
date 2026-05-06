@@ -2,7 +2,7 @@
 # =============================================================================
 # Unraid: Install the `claude-write` deploy channel
 # =============================================================================
-# Writer version: v2
+# Writer version: v3
 # Lets the read-only `claude` SSH user write specific files (hooks, plugin
 # assets) to a small set of pre-approved locations on the NAS.
 #
@@ -114,6 +114,20 @@ reject() {
     exit 1
 }
 
+# v3: plugin-name allowlist read from runtime config (was hardcoded in v2).
+# Format mirrors the filter parser exactly — both must agree on which entries
+# from allowlist.cfg are accepted. Default-deny on missing/empty/all-invalid
+# file. CLAUDE_SSH_ALLOWLIST_FILE env override is test-only; in production,
+# sudo's env_reset strips this var before the writer runs.
+ALLOWLIST_FILE="${CLAUDE_SSH_ALLOWLIST_FILE:-/boot/config/plugins/claude-ssh/allowlist.cfg}"
+
+load_plugin_allowlist() {
+    [ -f "$ALLOWLIST_FILE" ] || return 0
+    awk 'NF == 2 && $1 == "plugin" { print $2 }' "$ALLOWLIST_FILE" \
+        | grep -xE '[a-z][a-z0-9-]{0,63}' \
+        | sort -u
+}
+
 # Audit trap: catch unexpected exits (set -e tripped, signals, etc.) and log
 # them so the audit trail isn't silent. Reject path uses exit 1 explicitly,
 # which still triggers this trap; that's fine — the reject log already fired.
@@ -146,10 +160,13 @@ case "$CATEGORY" in
         [ -n "$PLUGIN_NAME" ] || reject "missing plugin-name"
         [ -n "$BASENAME" ]    || reject "missing basename"
         [ -z "$EXTRA" ]       || reject "unexpected extra args"
-        case "$PLUGIN_NAME" in
-            torrent-handler|claude-ssh) ;;
-            *) reject "unknown plugin-name '$PLUGIN_NAME'" ;;
-        esac
+        # Plugin-name lookup against runtime allowlist. Default-deny: empty/
+        # missing/all-invalid config → loop body never executes → plugin_ok=0.
+        plugin_ok=0
+        for p in $(load_plugin_allowlist); do
+            if [ "$PLUGIN_NAME" = "$p" ]; then plugin_ok=1; break; fi
+        done
+        [ "$plugin_ok" -eq 1 ] || reject "plugin-name '$PLUGIN_NAME' not in allowlist"
         ;;
     *)
         reject "unknown category '$CATEGORY'"
@@ -393,7 +410,9 @@ echo "    hook-sonarr   -> /mnt/user/appdata/sonarr/scripts/  (.sh, 755)"
 echo "    hook-radarr   -> /mnt/user/appdata/radarr/scripts/  (.sh, 755)"
 echo "    scratch       -> /tmp/claude-scratch/               (.sh .py .txt .json .log .conf .md)"
 echo ""
-echo "  Plugin — claude-write <cat> <plugin-name> <basename> (allowlist: torrent-handler, claude-ssh):"
+echo "  Plugin — claude-write <cat> <plugin-name> <basename>"
+echo "    (allowlist file: /boot/config/plugins/claude-ssh/allowlist.cfg —"
+echo "     add 'plugin <name>' lines; default-deny when empty)"
 echo "    plugin-script -> /usr/local/emhttp/plugins/<plugin>/scripts/  (.py .sh, 755)"
 echo "    plugin-page   -> /usr/local/emhttp/plugins/<plugin>/          (.page, 644)"
 echo "    plugin-include-> /usr/local/emhttp/plugins/<plugin>/include/  (.php .sh)"

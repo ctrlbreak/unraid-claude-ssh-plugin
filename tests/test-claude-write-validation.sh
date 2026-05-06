@@ -2,6 +2,12 @@
 # Cross-checks the claude-write category surface for consistency. Three
 # enforcement points must agree: the filter (in unraid-readonly-ssh-setup.sh),
 # the privileged writer (in claude-write-setup.sh), and the sudoers rule.
+#
+# v8/v3 update: the plugin-name allowlist moved from a hardcoded list to a
+# runtime config file. The cross-check now verifies filter and writer both
+# read from the SAME env-var-overrideable path, apply the SAME name regex,
+# and parse via the SAME awk shape. Behaviour-level coverage of the parser
+# lives in test-allowlist-config.sh.
 
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,22 +22,19 @@ fi
 
 FAIL=0
 
-# Categories the filter knows about (v7).
+# Categories the filter knows about (v7 split).
 FILTER_SIMPLE=$(grep -E '^CW_SIMPLE_CATEGORIES=' "$SETUP_FILTER" \
     | sed -E 's/^CW_SIMPLE_CATEGORIES="([^"]*)"$/\1/')
 FILTER_PLUGIN=$(grep -E '^CW_PLUGIN_CATEGORIES=' "$SETUP_FILTER" \
     | sed -E 's/^CW_PLUGIN_CATEGORIES="([^"]*)"$/\1/')
-FILTER_PLUGINS=$(grep -E '^CW_PLUGIN_NAMES=' "$SETUP_FILTER" \
-    | sed -E 's/^CW_PLUGIN_NAMES="([^"]*)"$/\1/')
 
-if [ -z "$FILTER_SIMPLE" ] || [ -z "$FILTER_PLUGIN" ] || [ -z "$FILTER_PLUGINS" ]; then
+if [ -z "$FILTER_SIMPLE" ] || [ -z "$FILTER_PLUGIN" ]; then
     echo "FAIL: could not parse filter category lists"
     FAIL=1
 fi
 
 echo "  filter simple: $FILTER_SIMPLE"
 echo "  filter plugin: $FILTER_PLUGIN"
-echo "  filter plugins allowlist: $FILTER_PLUGINS"
 
 # 1. Every filter category must appear in the writer's case statement.
 for cat in $FILTER_SIMPLE $FILTER_PLUGIN; do
@@ -63,27 +66,38 @@ else
     done
 fi
 
-# 3. Plugin-name allowlist in filter must match the writer's allowlist.
-# Match the line shaped `    torrent-handler|claude-ssh) ;;` — case body trails
-# the closing paren, so anchor on `)` not on end-of-line.
-WRITER_PLUGINS=$(grep -E '^[[:space:]]+[a-z|-]+\)[[:space:]]+;;[[:space:]]*$' "$SETUP_WRITER" \
-    | grep 'torrent-handler' \
-    | head -1 \
-    | sed -E 's/^[[:space:]]+([a-z|-]+)\).*/\1/' | tr '|' ' ')
-if [ -z "$WRITER_PLUGINS" ]; then
-    echo "  FAIL: writer plugin-name allowlist not parseable"
+# 3. Plugin-name allowlist sourced from runtime config — filter and writer
+# must read the SAME path with the SAME default. Both use:
+#   "${CLAUDE_SSH_ALLOWLIST_FILE:-/boot/config/plugins/claude-ssh/allowlist.cfg}"
+EXPECTED_PATH_FRAG='${CLAUDE_SSH_ALLOWLIST_FILE:-/boot/config/plugins/claude-ssh/allowlist.cfg}'
+if ! grep -qF "$EXPECTED_PATH_FRAG" "$SETUP_FILTER"; then
+    echo "  FAIL: filter does not reference allowlist path with expected default"
     FAIL=1
-else
-    # Compare as space-separated sorted sets.
-    fp=$(echo "$FILTER_PLUGINS" | tr ' ' '\n' | sort -u | tr '\n' ' ')
-    wp=$(echo "$WRITER_PLUGINS" | tr ' ' '\n' | sort -u | tr '\n' ' ')
-    if [ "$fp" != "$wp" ]; then
-        echo "  FAIL: plugin-name allowlist mismatch — filter='$fp' writer='$wp'"
-        FAIL=1
-    fi
+fi
+if ! grep -qF "$EXPECTED_PATH_FRAG" "$SETUP_WRITER"; then
+    echo "  FAIL: writer does not reference allowlist path with expected default"
+    FAIL=1
 fi
 
-# 4. Basename pattern consistent.
+# 4. Both must use the SAME awk extraction shape and the SAME post-validate
+# regex. Drift here means filter and writer could disagree on which entries
+# in allowlist.cfg are valid — a soft failure mode that would let one side
+# accept a name the other rejects.
+EXPECTED_AWK_LINE='awk '"'"'NF == 2 && $1 == "plugin" { print $2 }'"'"' "$'
+EXPECTED_GREP_LINE='grep -xE '"'"'[a-z][a-z0-9-]{0,63}'"'"
+for f in "$SETUP_FILTER" "$SETUP_WRITER"; do
+    name=$(basename "$f")
+    if ! grep -qF "$EXPECTED_AWK_LINE" "$f"; then
+        echo "  FAIL: $name missing expected awk extraction line for plugin allowlist"
+        FAIL=1
+    fi
+    if ! grep -qF "$EXPECTED_GREP_LINE" "$f"; then
+        echo "  FAIL: $name missing expected grep regex line for plugin allowlist"
+        FAIL=1
+    fi
+done
+
+# 5. Basename pattern consistent (unchanged from v7).
 FILTER_PATTERN=$(grep -oE "'\\^\[a-zA-Z0-9\]\[a-zA-Z0-9\._\-\]\{0,127\}\\\$'" "$SETUP_FILTER" | head -1)
 WRITER_PATTERN=$(grep -oE "'\\^\[a-zA-Z0-9\]\[a-zA-Z0-9\._\-\]\{0,127\}\\\$'" "$SETUP_WRITER" | head -1)
 if [ -z "$FILTER_PATTERN" ] || [ -z "$WRITER_PATTERN" ] || [ "$FILTER_PATTERN" != "$WRITER_PATTERN" ]; then

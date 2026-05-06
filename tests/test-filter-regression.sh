@@ -15,6 +15,17 @@ if [ ! -f "$SETUP" ]; then
     exit 1
 fi
 
+# v8: plugin-name allowlist now lives in a runtime config file. Seed a
+# sandbox copy so the existing allow cases for torrent-handler / claude-ssh
+# still pass; the env-var override keeps production /boot/config/ untouched.
+SANDBOX_DIR=$(mktemp -d -t claude-ssh-filter-XXXXXX)
+trap 'rm -rf "$SANDBOX_DIR" "${FILTER_TMP:-}"' EXIT
+cat > "$SANDBOX_DIR/allowlist.cfg" << 'EOF'
+plugin torrent-handler
+plugin claude-ssh
+EOF
+export CLAUDE_SSH_ALLOWLIST_FILE="$SANDBOX_DIR/allowlist.cfg"
+
 # Extract the heredoc (lines between `cat > "$FILTER_SCRIPT" << 'FILTER'`
 # and the bare `FILTER` line). Strip the marker lines themselves.
 FILTER_TMP=$(mktemp -t shell-filter-XXXXXX.sh)
@@ -124,6 +135,17 @@ run_case block 'claude-write plugin-page badplugin Foo.page'
 run_case block 'claude-write plugin-page torrent-handler'
 run_case block 'claude-write plugin-page torrent-handler Foo.page extra'
 run_case block 'claude-write unknown-cat foo.txt'
+
+# v8 allowlist behaviour: the sandbox allows torrent-handler + claude-ssh
+# (already covered above). With an empty allowlist, even those should block.
+EMPTY_ALLOWLIST="$SANDBOX_DIR/empty.cfg"
+: > "$EMPTY_ALLOWLIST"
+CLAUDE_SSH_ALLOWLIST_FILE_BACKUP="$CLAUDE_SSH_ALLOWLIST_FILE"
+export CLAUDE_SSH_ALLOWLIST_FILE="$EMPTY_ALLOWLIST"
+run_case block 'claude-write plugin-page torrent-handler Foo.page'
+run_case block 'claude-write plugin-page claude-ssh ClaudeSsh.page'
+# Restore for any subsequent cases.
+export CLAUDE_SSH_ALLOWLIST_FILE="$CLAUDE_SSH_ALLOWLIST_FILE_BACKUP"
 
 rm -f "$FILTER_TMP"
 

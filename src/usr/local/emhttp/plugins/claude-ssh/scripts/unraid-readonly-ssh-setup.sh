@@ -2,7 +2,7 @@
 # =============================================================================
 # Unraid: Create a read-only SSH user for Claude Code
 # =============================================================================
-# Filter version: v7
+# Filter version: v8
 # Uses authorized_keys command= restriction to force all SSH commands through
 # a filter script. Simpler and more secure than rbash — single enforcement
 # point that blocks destructive commands, dangerous flags, and shell tricks.
@@ -72,6 +72,11 @@ cat > "$FILTER_SCRIPT" << 'FILTER'
 #                   plugin-name argument (allowlist: torrent-handler, claude-ssh)
 #                   to support multiple plugins on one NAS. New `scratch`
 #                   category writes to /tmp/claude-scratch/ for ephemeral data.
+# v8 — 2026-05-06: Plugin-name allowlist moved from hardcoded list to runtime
+#                   config file at /boot/config/plugins/claude-ssh/allowlist.cfg.
+#                   Default-deny on missing/empty/all-invalid file. Filter is
+#                   advisory; the privileged writer is the enforcer. Format:
+#                   `plugin <name>` lines, name regex ^[a-z][a-z0-9-]{0,63}$.
 # =============================================================================
 
 # Disable filename globbing during validation. Filter logic uses unquoted
@@ -115,7 +120,19 @@ XARGS_INNER="cat stat head tail grep wc ls file readlink md5sum sha256sum awk cu
 #   plugin-page, plugin-include, plugin-script, plugin-cfg
 CW_SIMPLE_CATEGORIES="hook-sonarr hook-radarr scratch"
 CW_PLUGIN_CATEGORIES="plugin-page plugin-include plugin-script plugin-cfg"
-CW_PLUGIN_NAMES="torrent-handler claude-ssh"
+
+# v8: plugin-name allowlist moved from hardcoded list to runtime config file.
+# Format: `plugin <name>` lines, full-line `#` comments, blank lines ignored.
+# Default-deny on missing/empty file. CLAUDE_SSH_ALLOWLIST_FILE override is
+# test-only (sshd's default AcceptEnv is empty, blocking it from live SSH).
+CW_ALLOWLIST_FILE="${CLAUDE_SSH_ALLOWLIST_FILE:-/boot/config/plugins/claude-ssh/allowlist.cfg}"
+
+cw_load_plugin_allowlist() {
+    [ -f "$CW_ALLOWLIST_FILE" ] || return 0
+    awk 'NF == 2 && $1 == "plugin" { print $2 }' "$CW_ALLOWLIST_FILE" \
+        | grep -xE '[a-z][a-z0-9-]{0,63}' \
+        | sort -u
+}
 
 # --- Strip harmless stderr/stdout redirects to /dev/null before checking ---
 # Allow: 2>/dev/null, >/dev/null, 2>&1, &>/dev/null (all read-only / no file output)
@@ -291,13 +308,14 @@ for segment in "${SEGMENTS[@]}"; do
                 fi
                 cw_plugin="${args[2]}"
                 cw_name="${args[3]}"
-                # Plugin-name must be in allowlist (whitelist, not pattern).
+                # Plugin-name must be in runtime allowlist (whitelist, not pattern).
+                # Default-deny: empty/missing config → loop body never executes.
                 plugin_ok=0
-                for p in $CW_PLUGIN_NAMES; do
+                for p in $(cw_load_plugin_allowlist); do
                     if [ "$cw_plugin" = "$p" ]; then plugin_ok=1; break; fi
                 done
                 if [ "$plugin_ok" -eq 0 ]; then
-                    log_block "claude-write plugin-name '$cw_plugin' not allowed"
+                    log_block "claude-write plugin-name '$cw_plugin' not in allowlist"
                 fi
             fi
 

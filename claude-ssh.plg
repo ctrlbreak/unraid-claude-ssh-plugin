@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.04">
+  <!ENTITY version   "2026.05.06">
   <!ENTITY pluginURL "/boot/config/plugins/&name;/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY cfgDir    "/boot/config/plugins/&name;">
@@ -13,6 +13,14 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.06
+- Filter v8 + writer v3: plugin-name allowlist moved to runtime config at
+  /boot/config/plugins/claude-ssh/allowlist.cfg. Default-deny when empty.
+- install-runtime.sh seeds a commented-template allowlist.cfg on first install
+  (existing files never overwritten).
+- New tests: test-allowlist-config.sh (parser behaviour) +
+  test-boot-config-write-block.sh (filter blocks writes to /boot/config/).
+
 ###2026.05.04
 - Initial release: packages claude SSH filter v7 + claude-write writer v2
 - Single-tab Status page with collapsible Audit Log section
