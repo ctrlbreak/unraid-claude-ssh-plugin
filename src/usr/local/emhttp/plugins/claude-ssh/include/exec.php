@@ -6,10 +6,31 @@
  *   system_state      - file inventory (path, mtime, size, sha256)
  *   recent_activity   - 24h syslog counts: RECV / BLOCKED / writes per category
  *   audit_log         - paginated syslog lines with date+tag filters
+ *   load_allowlist    - read /boot/config/plugins/claude-ssh/allowlist.cfg
+ *   save_allowlist    - validate + atomically rewrite the allowlist
  *   dashboard         - compact summary for the dashboard tile
  *
  * Plain functions, no framework. Mirrors torrent-handler/include/exec.php style.
+ *
+ * Tests include this file via the PHP CLI; the dispatcher early-returns when
+ * the SAPI is "cli" so test code can call helper functions directly without
+ * bouncing off $_POST.
  */
+
+// Allowlist path + name regex must match the filter (unraid-readonly-ssh-setup.sh)
+// and writer (claude-write-setup.sh). Drift here lets the UI accept names the
+// runtime would reject (or vice versa). test-claude-write-validation.sh
+// asserts these constants stay in sync with the shell side.
+const CS_NAME_REGEX = '/^[a-z][a-z0-9-]{0,63}$/';
+
+function cs_allowlist_path() {
+    $env = getenv('CLAUDE_SSH_ALLOWLIST_FILE');
+    return $env !== false && $env !== '' ? $env : '/boot/config/plugins/claude-ssh/allowlist.cfg';
+}
+
+// CLI guard: skip the request dispatcher when we're invoked from PHP CLI
+// (i.e. from a test). Helper functions above remain callable.
+if (php_sapi_name() === 'cli') return;
 
 // Keep warnings/notices out of the response — any HTML before the JSON body
 // breaks the client's `$.post(..., 'json')` parse, leaving the UI stuck on
@@ -70,6 +91,18 @@ case 'audit_log':
     if ($maxLines < 1)    $maxLines = 1;
     if ($maxLines > 2000) $maxLines = 2000;
     echo json_encode(buildAuditLog($dateFilter, $tagFilter, $maxLines));
+    break;
+
+case 'load_allowlist':
+    echo json_encode(load_allowlist_file());
+    break;
+
+case 'save_allowlist':
+    $plugins    = $_POST['plugins']    ?? '';
+    $containers = $_POST['containers'] ?? '';
+    $result = save_allowlist_file($plugins, $containers);
+    if (empty($result['ok'])) http_response_code(400);
+    echo json_encode($result);
     break;
 
 case 'dashboard':
@@ -353,6 +386,148 @@ function buildDashboard($scriptsDir, $paths) {
         'writes_24h'     => $writes,
         'blocked_24h'    => $blocked,
         'color'          => $color,
+    ];
+}
+
+// ---------------------------------------------------------------------------
+// Allowlist load/save (Settings UI)
+// ---------------------------------------------------------------------------
+
+function cs_normalise_names($input) {
+    // Accepts: array of strings, comma-list, or newline-list. Returns trimmed,
+    // non-empty array. Splits on whitespace AND commas so the textareas are
+    // tolerant of either separator.
+    if (is_array($input)) {
+        $arr = $input;
+    } elseif (is_string($input)) {
+        $arr = preg_split('/[\s,]+/', $input);
+    } else {
+        $arr = [];
+    }
+    $out = [];
+    foreach ($arr as $item) {
+        $t = trim((string)$item);
+        if ($t !== '') $out[] = $t;
+    }
+    return $out;
+}
+
+function cs_allowlist_header() {
+    return <<<HEADER
+# claude-ssh allowlist — runtime config for the claude-write deploy channel.
+#
+# Edited via the Settings UI. Manual edits to comments or unrelated lines are
+# overwritten when this file is saved from the UI; edit the file directly to
+# preserve them.
+#
+# Format:
+#   plugin <name>      Allow plugin-* writes for /usr/local/emhttp/plugins/<name>/
+#   container <name>   Allow appdata-script writes for /mnt/user/appdata/<name>/scripts/
+#
+# Names must match: ^[a-z][a-z0-9-]{0,63}$  (lowercase, digits, hyphen)
+
+HEADER;
+}
+
+function load_allowlist_file($path = null) {
+    if ($path === null) $path = cs_allowlist_path();
+    $base = [
+        'path'               => $path,
+        'exists'             => false,
+        'plugins'            => [],
+        'containers'         => [],
+        'invalid_plugins'    => [],
+        'invalid_containers' => [],
+        'raw_size'           => 0,
+        'raw_mtime'          => null,
+    ];
+    if (!is_readable($path)) return $base;
+    $contents = @file_get_contents($path);
+    if ($contents === false) return $base;
+    $base['exists']    = true;
+    $base['raw_size']  = strlen($contents);
+    $base['raw_mtime'] = @date('c', @filemtime($path) ?: 0);
+
+    $plugins = $containers = $invPlugins = $invContainers = [];
+    foreach (explode("\n", $contents) as $line) {
+        $trimmed = trim($line);
+        if ($trimmed === '' || $trimmed[0] === '#') continue;
+        // Match "<kind> <name>" — same shape the awk parser sees (NF == 2).
+        if (preg_match('/^(plugin|container)\s+(\S+)\s*$/', $trimmed, $m)) {
+            $kind = $m[1];
+            $name = $m[2];
+            $valid = (bool)preg_match(CS_NAME_REGEX, $name);
+            if ($kind === 'plugin') {
+                if ($valid) $plugins[] = $name; else $invPlugins[] = $name;
+            } else {
+                if ($valid) $containers[] = $name; else $invContainers[] = $name;
+            }
+        }
+    }
+    $base['plugins']            = array_values(array_unique($plugins));
+    $base['containers']         = array_values(array_unique($containers));
+    $base['invalid_plugins']    = array_values(array_unique($invPlugins));
+    $base['invalid_containers'] = array_values(array_unique($invContainers));
+    return $base;
+}
+
+function save_allowlist_file($plugins, $containers, $path = null) {
+    if ($path === null) $path = cs_allowlist_path();
+    $plugins    = cs_normalise_names($plugins);
+    $containers = cs_normalise_names($containers);
+
+    $errors = [];
+    foreach ($plugins as $n) {
+        if (!preg_match(CS_NAME_REGEX, $n)) {
+            $errors[] = "invalid plugin name: '" . $n . "' (must match ^[a-z][a-z0-9-]{0,63}$)";
+        }
+    }
+    foreach ($containers as $n) {
+        if (!preg_match(CS_NAME_REGEX, $n)) {
+            $errors[] = "invalid container name: '" . $n . "' (must match ^[a-z][a-z0-9-]{0,63}$)";
+        }
+    }
+    if (!empty($errors)) return ['ok' => false, 'errors' => $errors];
+
+    $plugins    = array_values(array_unique($plugins));
+    $containers = array_values(array_unique($containers));
+
+    $body = cs_allowlist_header();
+    if (count($plugins) > 0) {
+        $body .= "\n# Plugins\n";
+        foreach ($plugins as $n) $body .= "plugin $n\n";
+    }
+    if (count($containers) > 0) {
+        $body .= "\n# Containers\n";
+        foreach ($containers as $n) $body .= "container $n\n";
+    }
+
+    $dir = dirname($path);
+    if (!is_dir($dir)) {
+        if (!@mkdir($dir, 0755, true)) {
+            return ['ok' => false, 'errors' => ["could not create directory: $dir"]];
+        }
+    }
+
+    // Atomic write: temp file in same dir, rename. Same-dir is required so
+    // the rename is atomic on the same filesystem (cross-FS rename falls back
+    // to copy+unlink, which has a window where a reader sees a partial file).
+    $tmp = $path . '.tmp.' . getmypid();
+    if (@file_put_contents($tmp, $body, LOCK_EX) === false) {
+        return ['ok' => false, 'errors' => ["could not write temp file: $tmp"]];
+    }
+    @chmod($tmp, 0644);
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+        return ['ok' => false, 'errors' => ["could not rename $tmp to $path"]];
+    }
+
+    return [
+        'ok'         => true,
+        'path'       => $path,
+        'plugins'    => $plugins,
+        'containers' => $containers,
+        'raw_mtime'  => @date('c', @filemtime($path) ?: 0),
     ];
 }
 

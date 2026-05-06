@@ -24,7 +24,7 @@ hooks are managed by the plugin so there's a single source of truth.
 
 ## Versions
 
-- **Plugin:** `2026.05.06a` (date-based, single source in `claude-ssh.plg`)
+- **Plugin:** `2026.05.06b` (date-based, single source in `claude-ssh.plg`)
 - **Filter:** `v9` — parsed from a `# Filter version:` comment in the setup script
 - **Writer:** `v4` — parsed from a `# Writer version:` comment in the setup script
 
@@ -90,6 +90,21 @@ invocation. The filter is advisory (early rejection at the SSH layer); the
 writer is the enforcer (defence in depth — a stale filter cache can't
 bypass the writer). Both reuse the same parametric parser, so plugin and
 container parsing stay in lockstep.
+
+### Editing via the Settings UI
+
+The Settings/Status tab has an **Allowlist** card with two textareas (one for
+plugins, one for containers) and Save / Reload buttons. The save handler
+validates each name against `^[a-z][a-z0-9-]{0,63}$` server-side and rejects
+the whole save with a clear error if any name is invalid. On success the
+allowlist is rewritten atomically (temp file plus rename in the same
+directory).
+
+Saving from the UI regenerates the file with a fixed header comment block —
+custom comments and unrelated lines are **not preserved**. Edit
+`/boot/config/plugins/claude-ssh/allowlist.cfg` directly if you need to
+keep them. The header advertises the format and name regex so even a
+hand-edited file is self-documenting.
 
 ## Migrating from filter v7 / v8 (`hook-sonarr` / `hook-radarr`)
 
@@ -160,10 +175,10 @@ deploy.sh                   # quick (claude-write) + --full (plugin install) mod
 tests/                      # Local lint / build / regression / idempotency suite
 README.md                   # This file
 src/usr/local/emhttp/plugins/claude-ssh/
-├── ClaudeSsh.page                  # Settings tab (Status + collapsible Audit Log)
+├── ClaudeSsh.page                  # Settings tab (Health + Allowlist editor + Status + Audit Log)
 ├── ClaudeSshDashboard.page         # Dashboard tile
-├── default.cfg                     # Defaults (empty for v1)
-├── include/exec.php                # AJAX backend (status, audit_log, recent_writes)
+├── default.cfg                     # Defaults (allowlist lives in /boot/config/plugins/claude-ssh/allowlist.cfg)
+├── include/exec.php                # AJAX backend (status, audit_log, recent_writes, load/save_allowlist)
 └── scripts/
     ├── install-runtime.sh              # Calls setup scripts + manages /boot/config/go
     ├── uninstall-runtime.sh            # Non-destructive cleanup

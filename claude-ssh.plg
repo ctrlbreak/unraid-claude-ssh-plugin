@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.06a">
+  <!ENTITY version   "2026.05.06b">
   <!ENTITY pluginURL "/boot/config/plugins/&name;/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY cfgDir    "/boot/config/plugins/&name;">
@@ -13,6 +13,21 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.06b
+- Settings UI: Allowlist editor on the Settings/Status tab. Two textareas for
+  plugin and container names, Save and Reload buttons, status pane.
+  Server-side validation against the same name regex used by the filter and
+  writer. Atomic write to allowlist.cfg via temp-file plus rename. Header
+  comment block is regenerated on every save (manual edits to comments and
+  unrelated lines are not preserved through the UI).
+- exec.php: new load_allowlist and save_allowlist routes; helper functions
+  load_allowlist_file and save_allowlist_file are also callable directly
+  from PHP CLI for tests (dispatcher early-returns under cli SAPI).
+- Tests: new test-settings-save.sh exercises the save/load round-trip with
+  a 35-case sandbox suite (skips if php is not installed).
+  test-claude-write-validation.sh extended to assert exec.php uses the same
+  allowlist path default, env-var override, and name regex as the shell side.
+
 ###2026.05.06a
 - Filter v9 + writer v4: hook-sonarr/hook-radarr categories collapsed into
   a generic appdata-script category. New 3-arg form: container name plus

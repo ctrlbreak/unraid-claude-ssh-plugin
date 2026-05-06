@@ -117,7 +117,32 @@ for f in "$SETUP_FILTER" "$SETUP_WRITER"; do
     fi
 done
 
-# 5. Basename pattern consistent (unchanged from v7).
+# 5. exec.php (Settings UI backend) must reference the SAME allowlist path
+# default and honour the SAME CLAUDE_SSH_ALLOWLIST_FILE env override, with the
+# SAME name regex. Drift here lets the UI accept names the runtime rejects
+# (or vice versa) — which silently breaks deploys.
+EXEC_PHP="$ROOT/src/usr/local/emhttp/plugins/claude-ssh/include/exec.php"
+if [ ! -f "$EXEC_PHP" ]; then
+    echo "  FAIL: $EXEC_PHP missing"
+    FAIL=1
+else
+    if ! grep -qF "/boot/config/plugins/claude-ssh/allowlist.cfg" "$EXEC_PHP"; then
+        echo "  FAIL: exec.php missing default allowlist path"
+        FAIL=1
+    fi
+    if ! grep -qF "CLAUDE_SSH_ALLOWLIST_FILE" "$EXEC_PHP"; then
+        echo "  FAIL: exec.php missing CLAUDE_SSH_ALLOWLIST_FILE env override"
+        FAIL=1
+    fi
+    # Same name regex (PHP form: '/^[a-z][a-z0-9-]{0,63}$/'). Match on the
+    # character-class fragment that's identical across PHP and shell-grep.
+    if ! grep -qF "[a-z][a-z0-9-]{0,63}" "$EXEC_PHP"; then
+        echo "  FAIL: exec.php missing name regex"
+        FAIL=1
+    fi
+fi
+
+# 6. Basename pattern consistent (unchanged from v7).
 FILTER_PATTERN=$(grep -oE "'\\^\[a-zA-Z0-9\]\[a-zA-Z0-9\._\-\]\{0,127\}\\\$'" "$SETUP_FILTER" | head -1)
 WRITER_PATTERN=$(grep -oE "'\\^\[a-zA-Z0-9\]\[a-zA-Z0-9\._\-\]\{0,127\}\\\$'" "$SETUP_WRITER" | head -1)
 if [ -z "$FILTER_PATTERN" ] || [ -z "$WRITER_PATTERN" ] || [ "$FILTER_PATTERN" != "$WRITER_PATTERN" ]; then

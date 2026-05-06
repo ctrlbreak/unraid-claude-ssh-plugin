@@ -103,12 +103,89 @@ table.cs-table tr.cs-row-missing { background: #fdecec; }
   word-break: break-all;
 }
 .cs-log-empty { color: #888; font-style: italic; padding: 16px; text-align: center; }
+
+.cs-allow-help { font-size: 0.9em; color: var(--text-secondary, #888); margin: 0 0 12px 0; }
+.cs-allow-help code {
+  background: rgba(0,0,0,0.05);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.95em;
+}
+.cs-allow-path {
+  font-family: monospace;
+  font-size: 0.78em;
+  color: var(--text-secondary, #888);
+  font-weight: normal;
+  margin-left: 8px;
+}
+.cs-allow-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+@media (max-width: 700px) {
+  .cs-allow-grid { grid-template-columns: 1fr; }
+}
+.cs-allow-grid label { display: flex; flex-direction: column; gap: 6px; }
+.cs-allow-grid label > span {
+  font-weight: 600;
+  color: var(--text-secondary, #555);
+  font-size: 0.9em;
+}
+.cs-allow-grid textarea {
+  font-family: monospace;
+  font-size: 0.9em;
+  padding: 8px;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 4px;
+  resize: vertical;
+  min-height: 120px;
+  background: #fff;
+  color: #222;
+}
+.cs-allow-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cs-allow-status { font-size: 0.9em; }
+.cs-allow-status-ok    { color: #27ae60; }
+.cs-allow-status-warn  { color: #f39c12; }
+.cs-allow-status-err   { color: #e74c3c; }
+.cs-allow-status-info  { color: var(--text-secondary, #888); }
 </style>
 
 <div class="cs-card-section">
   <h3>Health</h3>
   <div class="cs-summary" id="cs-summary"></div>
   <div id="cs-versions" style="font-size: 0.9em; color: var(--text-secondary, #888); margin-top: 4px;"></div>
+</div>
+
+<div class="cs-card-section">
+  <h3>Allowlist <span class="cs-allow-path">/boot/config/plugins/claude-ssh/allowlist.cfg</span></h3>
+  <p class="cs-allow-help">
+    Controls which plugins and containers <code>claude-write</code> can deploy
+    into. One name per line; lowercase letters, digits, and hyphens (max 64).
+    Saving here rewrites the file — comments and unrelated lines are not
+    preserved. Default-deny: empty list blocks all plugin / container writes.
+  </p>
+  <div class="cs-allow-grid">
+    <label>
+      <span>Plugins (3-arg <code>plugin-page</code>, <code>plugin-include</code>, <code>plugin-script</code>, <code>plugin-cfg</code>)</span>
+      <textarea id="cs-allow-plugins" rows="6" spellcheck="false" placeholder="torrent-handler&#10;claude-ssh"></textarea>
+    </label>
+    <label>
+      <span>Containers (3-arg <code>appdata-script</code>)</span>
+      <textarea id="cs-allow-containers" rows="6" spellcheck="false" placeholder="sonarr&#10;radarr"></textarea>
+    </label>
+  </div>
+  <div class="cs-allow-actions">
+    <button id="cs-allow-save" class="btn">Save</button>
+    <button id="cs-allow-reload" class="btn">Reload from disk</button>
+    <span id="cs-allow-status" class="cs-allow-status"></span>
+  </div>
 </div>
 
 <div class="cs-card-section">
@@ -272,6 +349,55 @@ table.cs-table tr.cs-row-missing { background: #fdecec; }
     $.post(endpoint, { action: 'recent_activity' }, renderActivity, 'json');
   }
 
+  // Allowlist editor — load + save against /boot/config/plugins/claude-ssh/allowlist.cfg
+  function setAllowStatus(level, msg) {
+    var el = byId('cs-allow-status');
+    el.textContent = msg || '';
+    el.className = 'cs-allow-status cs-allow-status-' + (level || 'info');
+  }
+  function loadAllowlist() {
+    $.post(endpoint, { action: 'load_allowlist' }, function(data) {
+      byId('cs-allow-plugins').value    = (data.plugins    || []).join('\n');
+      byId('cs-allow-containers').value = (data.containers || []).join('\n');
+      var inv = (data.invalid_plugins || []).concat(data.invalid_containers || []);
+      if (inv.length) {
+        setAllowStatus('warn', 'File contains invalid entries (silently ignored): ' + inv.join(', '));
+      } else if (!data.exists) {
+        setAllowStatus('info', 'allowlist.cfg does not exist yet — saving will create it.');
+      } else {
+        setAllowStatus('info', 'Loaded ' + (data.plugins || []).length + ' plugin(s), ' + (data.containers || []).length + ' container(s).');
+      }
+    }, 'json').fail(function(xhr) {
+      setAllowStatus('err', 'Load failed (HTTP ' + xhr.status + ')');
+    });
+  }
+  function saveAllowlist() {
+    setAllowStatus('info', 'Saving...');
+    $.post(endpoint, {
+      action:     'save_allowlist',
+      plugins:    byId('cs-allow-plugins').value,
+      containers: byId('cs-allow-containers').value,
+    }, function(data) {
+      if (data && data.ok) {
+        byId('cs-allow-plugins').value    = (data.plugins    || []).join('\n');
+        byId('cs-allow-containers').value = (data.containers || []).join('\n');
+        setAllowStatus('ok', 'Saved. ' + (data.plugins || []).length + ' plugin(s), ' + (data.containers || []).length + ' container(s) active.');
+        // Refresh the System state card so the file mtime reflects the change.
+        $.post(endpoint, { action: 'system_state' }, renderFiles, 'json');
+      } else {
+        var errs = (data && data.errors) ? data.errors.join('; ') : 'unknown error';
+        setAllowStatus('err', 'Save failed: ' + errs);
+      }
+    }, 'json').fail(function(xhr) {
+      var msg = 'Save failed (HTTP ' + xhr.status + ')';
+      try {
+        var resp = JSON.parse(xhr.responseText);
+        if (resp && resp.errors) msg += ': ' + resp.errors.join('; ');
+      } catch (e) { /* leave msg as-is */ }
+      setAllowStatus('err', msg);
+    });
+  }
+
   function loadAudit() {
     var date = byId('cs-audit-date').value;
     var tag  = byId('cs-audit-tag').value;
@@ -300,6 +426,9 @@ table.cs-table tr.cs-row-missing { background: #fdecec; }
   byId('cs-audit-date').addEventListener('change', loadAudit);
   byId('cs-audit-tag').addEventListener('change', loadAudit);
 
+  byId('cs-allow-save').addEventListener('click', saveAllowlist);
+  byId('cs-allow-reload').addEventListener('click', loadAllowlist);
+
   // Refresh on tab activation, pause when hidden
   document.addEventListener('visibilitychange', function() {
     if (document.hidden) stopPolling();
@@ -307,6 +436,7 @@ table.cs-table tr.cs-row-missing { background: #fdecec; }
   });
 
   loadAll();
+  loadAllowlist();
   startPolling();
 })();
 </script>

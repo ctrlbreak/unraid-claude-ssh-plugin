@@ -15,6 +15,7 @@ TESTS=(
     test-claude-write-validation.sh
     test-allowlist-config.sh
     test-boot-config-write-block.sh
+    test-settings-save.sh
     test-idempotency.sh
     test-migration.sh
     test-versions.sh
