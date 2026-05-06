@@ -257,8 +257,9 @@ table.cs-table tr.cs-row-missing { background: #fdecec; }
 
   function renderSummary(data) {
     var h = data.health || {};
+    var user = data.username || 'claude';
     var kpis = [
-      { label: 'User claude',       ok: h.user_exists },
+      { label: 'User ' + user,      ok: h.user_exists },
       { label: 'Filter',            ok: h.filter_installed,  detail: data.filter_version },
       { label: 'Writer',            ok: h.priv_installed && h.wrapper_installed, detail: data.writer_version },
       { label: 'Sudoers',           ok: h.sudoers_installed },

@@ -23,9 +23,32 @@
 // asserts these constants stay in sync with the shell side.
 const CS_NAME_REGEX = '/^[a-z][a-z0-9-]{0,63}$/';
 
+// SSH username regex (POSIX-ish): start with a-z, then a-z0-9- up to 32 chars.
+// Same regex used by the four shell scripts' cs_resolve_username function.
+const CS_USERNAME_REGEX = '/^[a-z][a-z0-9-]{0,31}$/';
+
 function cs_allowlist_path() {
     $env = getenv('CLAUDE_SSH_ALLOWLIST_FILE');
     return $env !== false && $env !== '' ? $env : '/boot/config/plugins/claude-ssh/allowlist.cfg';
+}
+
+// Resolve the configured SSH username. Mirrors cs_resolve_username in the
+// shell scripts: env var → /boot/config/plugins/claude-ssh/username → "claude".
+// Invalid values fall back to "claude" so the Status page never reports paths
+// derived from a malformed config.
+function cs_username() {
+    $env = getenv('CLAUDE_SSH_USERNAME');
+    if ($env !== false && $env !== '' && preg_match(CS_USERNAME_REGEX, $env)) {
+        return $env;
+    }
+    $file = '/boot/config/plugins/claude-ssh/username';
+    if (is_readable($file)) {
+        $val = trim((string)@file_get_contents($file));
+        if ($val !== '' && preg_match(CS_USERNAME_REGEX, $val)) {
+            return $val;
+        }
+    }
+    return 'claude';
 }
 
 // CLI guard: skip the request dispatcher when we're invoked from PHP CLI
@@ -58,12 +81,15 @@ $scriptsDir = "$pluginDir/scripts";
 $pluginPlg  = "/var/log/plugins/$plugin.plg";
 
 // Runtime-deployed file paths (written by the setup scripts on the NAS).
+// /home/<user>/ paths track the configured SSH username so the Status page
+// reflects whatever username install-runtime.sh resolved.
+$cs_user = cs_username();
 $paths = [
-    'filter'          => '/home/claude/shell-filter.sh',
+    'filter'          => "/home/$cs_user/shell-filter.sh",
     'writer_wrapper'  => '/usr/local/bin/claude-write',
     'writer_priv'     => '/usr/local/sbin/claude-write-priv',
     'sudoers'         => '/etc/sudoers.d/claude-write',
-    'authorized_keys' => '/home/claude/.ssh/authorized_keys',
+    'authorized_keys' => "/home/$cs_user/.ssh/authorized_keys",
 ];
 
 $action = $_POST['action'] ?? '';
@@ -73,7 +99,7 @@ header('Content-Type: application/json');
 switch ($action) {
 
 case 'status':
-    echo json_encode(buildStatus($scriptsDir, $pluginPlg, $paths));
+    echo json_encode(buildStatus($scriptsDir, $pluginPlg, $paths, $cs_user));
     break;
 
 case 'system_state':
@@ -106,7 +132,7 @@ case 'save_allowlist':
     break;
 
 case 'dashboard':
-    echo json_encode(buildDashboard($scriptsDir, $paths));
+    echo json_encode(buildDashboard($scriptsDir, $paths, $cs_user));
     break;
 
 default:
@@ -170,9 +196,9 @@ function sshKeyCount($authorizedKeysPath) {
     return $count;
 }
 
-function buildStatus($scriptsDir, $pluginPlg, $paths) {
+function buildStatus($scriptsDir, $pluginPlg, $paths, $username = 'claude') {
     // Versions: read from the canonical source scripts that the plugin packages.
-    // The runtime filter at /home/claude/shell-filter.sh is an expansion of the
+    // The runtime filter at /home/<user>/shell-filter.sh is an expansion of the
     // setup script's heredoc — same logic, different path.
     $filterVer = readVersionMarker("$scriptsDir/unraid-readonly-ssh-setup.sh", 'Filter version');
     $writerVer = readVersionMarker("$scriptsDir/claude-write-setup.sh",       'Writer version');
@@ -180,7 +206,7 @@ function buildStatus($scriptsDir, $pluginPlg, $paths) {
 
     // User existence: check /etc/passwd directly (no need to fork id).
     $passwd = @file_get_contents('/etc/passwd');
-    $userExists = $passwd !== false && (bool)preg_match('/^claude:/m', $passwd);
+    $userExists = $passwd !== false && (bool)preg_match('/^' . preg_quote($username, '/') . ':/m', $passwd);
 
     // Sudoers presence: either the .d fragment or the appended block in /etc/sudoers.
     $sudoersFragment = file_exists($paths['sudoers']);
@@ -207,6 +233,7 @@ function buildStatus($scriptsDir, $pluginPlg, $paths) {
         'plugin_version'  => $pluginVer,
         'filter_version'  => $filterVer,
         'writer_version'  => $writerVer,
+        'username'        => $username,
         'health'          => $health,
         'all_healthy'     => $allHealthy,
         'ssh_key_count'   => sshKeyCount($paths['authorized_keys']),
@@ -338,11 +365,11 @@ function buildAuditLog($dateFilter, $tagFilter, $maxLines) {
     ];
 }
 
-function buildDashboard($scriptsDir, $paths) {
+function buildDashboard($scriptsDir, $paths, $username = 'claude') {
     $filterVer = readVersionMarker("$scriptsDir/unraid-readonly-ssh-setup.sh", 'Filter version');
     $userExists = false;
     $passwd = @file_get_contents('/etc/passwd');
-    if ($passwd !== false) $userExists = (bool)preg_match('/^claude:/m', $passwd);
+    if ($passwd !== false) $userExists = (bool)preg_match('/^' . preg_quote($username, '/') . ':/m', $passwd);
 
     $filterPresent  = file_exists($paths['filter']);
     $writerPresent  = file_exists($paths['writer_wrapper']) && file_exists($paths['writer_priv']);

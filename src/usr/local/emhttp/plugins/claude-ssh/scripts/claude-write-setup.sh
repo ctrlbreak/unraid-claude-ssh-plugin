@@ -40,6 +40,25 @@ case "$SELF_PATH" in
     *) PLUGIN_INVOCATION=0 ;;
 esac
 
+# --- Resolve SSH username (configurable, setup-time only) ----------------
+# See unraid-readonly-ssh-setup.sh for the canonical comment block. This is a
+# verbatim duplicate; test-username-configurable.sh enforces drift checks.
+cs_resolve_username() {
+    local _u="" _file="/boot/config/plugins/claude-ssh/username"
+    if [ -n "${CLAUDE_SSH_USERNAME:-}" ]; then
+        _u="$CLAUDE_SSH_USERNAME"
+    elif [ -f "$_file" ]; then
+        _u=$(head -n1 "$_file" 2>/dev/null | tr -d ' \t\r\n')
+    fi
+    [ -z "$_u" ] && _u="claude"
+    if ! echo "$_u" | grep -qE '^[a-z][a-z0-9-]{0,31}$'; then
+        echo "ERROR: invalid SSH username '$_u' (must match ^[a-z][a-z0-9-]{0,31}\$)" >&2
+        return 1
+    fi
+    printf '%s\n' "$_u"
+}
+USERNAME=$(cs_resolve_username) || exit 1
+
 WRAPPER_PATH=/usr/local/bin/claude-write
 PRIV_PATH=/usr/local/sbin/claude-write-priv
 OLD_PRIV_PATH=/usr/local/sbin/claude-write   # leftover from earlier versions
@@ -342,17 +361,20 @@ chown root:root "$PRIV_PATH"
 echo "Installed privileged writer at $PRIV_PATH"
 
 # --- 3. Sudoers rule (with visudo validation) ---
+# USERNAME is interpolated into the principal so a non-default SSH user gets
+# the right sudo grants. Categories list is fixed (no shell metacharacters
+# from $USERNAME — the resolver enforces ^[a-z][a-z0-9-]{0,31}$).
 TMP_SUDO=$(mktemp)
-cat > "$TMP_SUDO" << 'SUDO'
-# Allow the read-only `claude` user to invoke claude-write for specific
+cat > "$TMP_SUDO" << SUDO
+# Allow the read-only \`$USERNAME\` user to invoke claude-write for specific
 # categories only. Each pattern matches the exact argv shape — sudo's wildcard
-# `*` matches one whole argument, blocking extra-args injection. The privileged
+# \`*\` matches one whole argument, blocking extra-args injection. The privileged
 # script re-validates everything as defence in depth.
 #
 # v9: plugin-* and appdata-script take a 2nd-arg target (* *). The simple
 # scratch category keeps its 2-arg shape. (hook-sonarr/hook-radarr removed in
 # v9 — replaced by appdata-script <container>.)
-claude ALL=(root) NOPASSWD: /usr/local/sbin/claude-write-priv scratch *, /usr/local/sbin/claude-write-priv plugin-script * *, /usr/local/sbin/claude-write-priv plugin-page * *, /usr/local/sbin/claude-write-priv plugin-include * *, /usr/local/sbin/claude-write-priv plugin-cfg * *, /usr/local/sbin/claude-write-priv appdata-script * *
+$USERNAME ALL=(root) NOPASSWD: /usr/local/sbin/claude-write-priv scratch *, /usr/local/sbin/claude-write-priv plugin-script * *, /usr/local/sbin/claude-write-priv plugin-page * *, /usr/local/sbin/claude-write-priv plugin-include * *, /usr/local/sbin/claude-write-priv plugin-cfg * *, /usr/local/sbin/claude-write-priv appdata-script * *
 SUDO
 
 # Validate before installing
@@ -441,11 +463,11 @@ echo "Both allowlists default-deny when empty. Edit allowlist.cfg to enable."
 echo ""
 echo "Usage from a workstation:"
 echo "  cat my-hook.sh \\"
-echo "    | ssh -i ~/.ssh/claude_unraid claude@nas \\"
+echo "    | ssh -i ~/.ssh/${USERNAME}_unraid $USERNAME@nas \\"
 echo "      'claude-write appdata-script sonarr my-hook.sh'"
 echo ""
 echo "  cat my-plugin/src/.../Foo.page \\"
-echo "    | ssh -i ~/.ssh/claude_unraid claude@nas \\"
+echo "    | ssh -i ~/.ssh/${USERNAME}_unraid $USERNAME@nas \\"
 echo "      'claude-write plugin-page my-plugin Foo.page'"
 echo ""
 echo "Audit log:"

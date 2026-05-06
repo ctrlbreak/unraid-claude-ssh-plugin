@@ -57,9 +57,10 @@ for cat in $FILTER_SIMPLE $FILTER_PLUGIN $FILTER_CONTAINER; do
 done
 
 # 2. Every filter category must appear in the sudoers line.
-SUDOERS_LINE=$(grep '^claude ALL=' "$SETUP_WRITER")
+# Phase 6: principal is now $USERNAME (interpolated at install time, not hardcoded).
+SUDOERS_LINE=$(grep '^\$USERNAME ALL=' "$SETUP_WRITER")
 if [ -z "$SUDOERS_LINE" ]; then
-    echo "  FAIL: sudoers rule line not found in claude-write-setup.sh"
+    echo "  FAIL: sudoers rule line not found in claude-write-setup.sh (expected '\$USERNAME ALL=...')"
     FAIL=1
 else
     for cat in $FILTER_SIMPLE; do

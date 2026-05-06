@@ -19,7 +19,30 @@
 
 set -euo pipefail
 
-USERNAME="claude"
+# --- Resolve SSH username (configurable, setup-time only) ----------------
+# Precedence: CLAUDE_SSH_USERNAME env var > /boot/config/plugins/claude-ssh/
+# username file (single line) > default "claude". Validated against POSIX
+# user name rules (^[a-z][a-z0-9-]{0,31}$). The runtime filter and writer do
+# not depend on the username — only sshd_config, sudoers principal, and the
+# /home/<user>/ paths consume it. This block is duplicated verbatim across
+# unraid-readonly-ssh-setup.sh, claude-write-setup.sh, install-runtime.sh,
+# and uninstall-runtime.sh; test-username-configurable.sh enforces the drift
+# check. Keep them identical when editing.
+cs_resolve_username() {
+    local _u="" _file="/boot/config/plugins/claude-ssh/username"
+    if [ -n "${CLAUDE_SSH_USERNAME:-}" ]; then
+        _u="$CLAUDE_SSH_USERNAME"
+    elif [ -f "$_file" ]; then
+        _u=$(head -n1 "$_file" 2>/dev/null | tr -d ' \t\r\n')
+    fi
+    [ -z "$_u" ] && _u="claude"
+    if ! echo "$_u" | grep -qE '^[a-z][a-z0-9-]{0,31}$'; then
+        echo "ERROR: invalid SSH username '$_u' (must match ^[a-z][a-z0-9-]{0,31}\$)" >&2
+        return 1
+    fi
+    printf '%s\n' "$_u"
+}
+USERNAME=$(cs_resolve_username) || exit 1
 HOME_DIR="/home/$USERNAME"
 FILTER_SCRIPT="$HOME_DIR/shell-filter.sh"
 
@@ -87,14 +110,14 @@ cat > "$FILTER_SCRIPT" << 'FILTER'
 
 # Disable filename globbing during validation. Filter logic uses unquoted
 # expansions (e.g. `for w in $trimmed`) which would otherwise glob against
-# /home/claude. The final `bash -f -c` below also runs noglob so the executed
-# command sees the same arguments the filter validated.
+# the SSH user's home directory. The final `bash -f -c` below also runs
+# noglob so the executed command sees the same arguments the filter validated.
 set -f
 
 CMD="${SSH_ORIGINAL_COMMAND:-}"
 
 if [ -z "$CMD" ]; then
-    echo "Read-only shell. Usage: ssh claude@host 'command'"
+    echo "Read-only shell. Usage: ssh ${USER:-<user>}@host 'command'"
     echo "Allowed: ls, find, cat, head, tail, grep, df, du, ps, stat, curl (GET only), etc."
     exit 0
 fi
@@ -379,7 +402,7 @@ done
 
 # All checks passed — execute under bash with -f (noglob) so the executed
 # command sees the same args the filter validated. -f is critical: without it,
-# a command containing `*` would be globbed by bash -c against /home/claude.
+# a command containing `*` would be globbed against the user's home directory.
 exec bash -f -c "$CMD"
 FILTER
 
@@ -416,7 +439,7 @@ else
     echo ""
 fi
 
-# v6 hardening: lock SSH config to root so a compromised `claude` can't
+# v6 hardening: lock SSH config to root so a compromised SSH user can't
 # rewrite authorized_keys (e.g. via `curl -K cfg` with `output=...`) to drop
 # the command= restriction for future logins. sshd reads as root before drop,
 # so root-owned auth files still authenticate normally; StrictModes accepts
@@ -429,7 +452,7 @@ chmod 644 "$HOME_DIR/.ssh/authorized_keys"
 chown root:root "$FILTER_SCRIPT"
 echo "SSH key auth configured with command= restriction (auth files locked to root)."
 
-# --- 4. Add claude to SSH AllowUsers ---
+# --- 4. Add the SSH user to AllowUsers ---
 SSHD_CONFIG="/etc/ssh/sshd_config"
 SSHD_CHANGED=0
 

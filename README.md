@@ -24,7 +24,7 @@ hooks are managed by the plugin so there's a single source of truth.
 
 ## Versions
 
-- **Plugin:** `2026.05.06b` (date-based, single source in `claude-ssh.plg`)
+- **Plugin:** `2026.05.06c` (date-based, single source in `claude-ssh.plg`)
 - **Filter:** `v9` — parsed from a `# Filter version:` comment in the setup script
 - **Writer:** `v4` — parsed from a `# Writer version:` comment in the setup script
 
@@ -105,6 +105,48 @@ custom comments and unrelated lines are **not preserved**. Edit
 `/boot/config/plugins/claude-ssh/allowlist.cfg` directly if you need to
 keep them. The header advertises the format and name regex so even a
 hand-edited file is self-documenting.
+
+## Configurable SSH username
+
+Default username is `claude`. To use a different name, set it **before** the
+plugin runs `install-runtime.sh` (i.e. before plugin install, or before the
+first reboot if installing manually):
+
+```bash
+# Either env var (transient):
+CLAUDE_SSH_USERNAME=ops bash install-runtime.sh
+
+# Or persist to flash so reboots resolve the same name without the env var:
+mkdir -p /boot/config/plugins/claude-ssh
+echo ops > /boot/config/plugins/claude-ssh/username
+chmod 644 /boot/config/plugins/claude-ssh/username
+```
+
+Precedence: `CLAUDE_SSH_USERNAME` env var → `/boot/config/plugins/claude-ssh/username`
+file → default `claude`. The file is seeded on first install with the
+resolved value and is **never overwritten** afterwards, so explicit user
+choices survive plugin upgrades.
+
+The username must match `^[a-z][a-z0-9-]{0,31}$` (POSIX-ish: lowercase
+letter followed by lowercase/digit/hyphen, max 32 chars). Invalid values
+abort the install with a clear error.
+
+Where the username flows:
+
+- `useradd` / `passwd -l` / `usermod -aG users` (user creation)
+- `/home/<user>/shell-filter.sh` and `/home/<user>/.ssh/authorized_keys`
+- `AllowUsers <user>` in `/etc/ssh/sshd_config`
+- Sudoers principal in `/etc/sudoers.d/claude-write`
+- Smoke tests, uninstall stripping, Settings/Status tab Health KPI
+
+The filter, the privileged writer, and the `claude-write` binary names are
+not the SSH username — they stay constant regardless of what username you
+pick. Only the user creation and the sudoers principal change.
+
+**Switching the username on an existing install:** uninstall the plugin
+(non-destructive — preserves `/home/<old-user>/`), update the username
+file, then reinstall. The old user account stays around; remove it
+manually with `userdel <old-user>` if no longer needed.
 
 ## Migrating from filter v7 / v8 (`hook-sonarr` / `hook-radarr`)
 

@@ -3,12 +3,15 @@
 # claude-ssh plugin — runtime uninstaller
 # =============================================================================
 # Called by claude-ssh.plg on plugin remove. Non-destructive by default:
-# tears down runtime artifacts but PRESERVES the claude user, /home/claude/
+# tears down runtime artifacts but PRESERVES the SSH user, /home/<user>/
 # (authorized_keys), and /mnt/cache/appdata/claude-write-backups/.
 #
+# Username is resolved from CLAUDE_SSH_USERNAME env var or
+# /boot/config/plugins/claude-ssh/username file (defaults to "claude").
+#
 # To fully purge after this runs:
-#   userdel claude
-#   rm -rf /home/claude
+#   userdel <user>
+#   rm -rf /home/<user>
 #   rm -rf /mnt/cache/appdata/claude-write-backups
 # =============================================================================
 
@@ -31,7 +34,26 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-log "uninstall-runtime.sh starting"
+# --- Resolve SSH username (best-effort; falls back to "claude") -----------
+# See unraid-readonly-ssh-setup.sh for the canonical comment block. This is a
+# verbatim duplicate; test-username-configurable.sh enforces drift checks.
+cs_resolve_username() {
+    local _u="" _file="/boot/config/plugins/claude-ssh/username"
+    if [ -n "${CLAUDE_SSH_USERNAME:-}" ]; then
+        _u="$CLAUDE_SSH_USERNAME"
+    elif [ -f "$_file" ]; then
+        _u=$(head -n1 "$_file" 2>/dev/null | tr -d ' \t\r\n')
+    fi
+    [ -z "$_u" ] && _u="claude"
+    if ! echo "$_u" | grep -qE '^[a-z][a-z0-9-]{0,31}$'; then
+        echo "ERROR: invalid SSH username '$_u' (must match ^[a-z][a-z0-9-]{0,31}\$)" >&2
+        return 1
+    fi
+    printf '%s\n' "$_u"
+}
+USERNAME=$(cs_resolve_username) || USERNAME="claude"
+
+log "uninstall-runtime.sh starting (USERNAME=$USERNAME)"
 
 # --- 1. Strip /boot/config/go hook (plugin's marker + legacy markers) ---
 if [ -f "$GO_SCRIPT" ]; then
@@ -85,20 +107,20 @@ for f in /usr/local/bin/claude-write /usr/local/sbin/claude-write-priv /usr/loca
     fi
 done
 
-# --- 5. Strip AllowUsers claude from sshd_config ---
+# --- 5. Strip AllowUsers <USERNAME> from sshd_config ---
 SSHD_CONFIG="/etc/ssh/sshd_config"
 SSHD_CHANGED=0
 for cfg in "$SSHD_CONFIG" /boot/config/ssh/sshd_config; do
     [ -f "$cfg" ] || continue
-    if grep -qE "^AllowUsers.*\bclaude\b" "$cfg"; then
-        # If `claude` is the only user in AllowUsers, drop the whole line.
+    if grep -qE "^AllowUsers.*\b${USERNAME}\b" "$cfg"; then
+        # If <USERNAME> is the only user in AllowUsers, drop the whole line.
         # Otherwise just remove the token.
-        if grep -qE "^AllowUsers[[:space:]]+claude[[:space:]]*$" "$cfg"; then
-            sed -i '/^AllowUsers[[:space:]]\+claude[[:space:]]*$/d' "$cfg"
+        if grep -qE "^AllowUsers[[:space:]]+${USERNAME}[[:space:]]*$" "$cfg"; then
+            sed -i "/^AllowUsers[[:space:]]\\+${USERNAME}[[:space:]]*\$/d" "$cfg"
         else
-            sed -i 's/\(^AllowUsers.*\)[[:space:]]\+claude\b/\1/' "$cfg"
+            sed -i "s/\\(^AllowUsers.*\\)[[:space:]]\\+${USERNAME}\\b/\\1/" "$cfg"
         fi
-        log "stripped 'claude' from AllowUsers in $cfg"
+        log "stripped '$USERNAME' from AllowUsers in $cfg"
         [ "$cfg" = "$SSHD_CONFIG" ] && SSHD_CHANGED=1
     fi
 done
@@ -108,5 +130,5 @@ fi
 
 # --- 6. Final message ---
 log "uninstall-runtime.sh complete"
-log "PRESERVED: /home/claude (authorized_keys), claude user, claude-write-backups"
-log "To fully purge: userdel claude && rm -rf /home/claude /mnt/cache/appdata/claude-write-backups"
+log "PRESERVED: /home/$USERNAME (authorized_keys), $USERNAME user, claude-write-backups"
+log "To fully purge: userdel $USERNAME && rm -rf /home/$USERNAME /mnt/cache/appdata/claude-write-backups"

@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.06b">
+  <!ENTITY version   "2026.05.06c">
   <!ENTITY pluginURL "/boot/config/plugins/&name;/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY cfgDir    "/boot/config/plugins/&name;">
@@ -13,6 +13,24 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.06c
+- Configurable SSH username (setup-time only). Setup scripts read
+  CLAUDE_SSH_USERNAME from env or /boot/config/plugins/claude-ssh/username
+  (single-line file), defaulting to "claude". Validated against
+  ^[a-z][a-z0-9-]{0,31}$. Existing installs unaffected — defaults match
+  prior behaviour.
+- install-runtime.sh resolves the username, exports it for child setup
+  scripts, and seeds the persisted file on first install (never overwritten,
+  so explicit user choice survives).
+- claude-write-setup.sh substitutes the resolved username into the sudoers
+  principal so a non-default SSH user receives the matching grants.
+- exec.php derives /home/&lt;user&gt;/ paths and the /etc/passwd existence
+  check from the same source. Status payload exposes the configured
+  username so the Settings page surfaces it on the Health KPI.
+- New test-username-configurable.sh: drift check across the four shell
+  scripts, env/file/default precedence, validation rejects, sudoers
+  principal parameterisation, install-runtime seeding (32 cases).
+
 ###2026.05.06b
 - Settings UI: Allowlist editor on the Settings/Status tab. Two textareas for
   plugin and container names, Save and Reload buttons, status pane.

@@ -33,6 +33,41 @@ fi
 
 log "install-runtime.sh starting"
 
+# --- 0. Resolve and persist SSH username (configurable, setup-time only) ---
+# See unraid-readonly-ssh-setup.sh for the canonical comment block. This is a
+# verbatim duplicate; test-username-configurable.sh enforces drift checks.
+cs_resolve_username() {
+    local _u="" _file="/boot/config/plugins/claude-ssh/username"
+    if [ -n "${CLAUDE_SSH_USERNAME:-}" ]; then
+        _u="$CLAUDE_SSH_USERNAME"
+    elif [ -f "$_file" ]; then
+        _u=$(head -n1 "$_file" 2>/dev/null | tr -d ' \t\r\n')
+    fi
+    [ -z "$_u" ] && _u="claude"
+    if ! echo "$_u" | grep -qE '^[a-z][a-z0-9-]{0,31}$'; then
+        echo "ERROR: invalid SSH username '$_u' (must match ^[a-z][a-z0-9-]{0,31}\$)" >&2
+        return 1
+    fi
+    printf '%s\n' "$_u"
+}
+USERNAME=$(cs_resolve_username) || exit 1
+export CLAUDE_SSH_USERNAME="$USERNAME"
+log "resolved SSH username = $USERNAME"
+
+# Persist on first install so subsequent reboots resolve the same name even
+# without the env var. Never overwrite an existing file (preserves explicit
+# user choice, including changes made between installs).
+USERNAME_DIR="/boot/config/plugins/claude-ssh"
+USERNAME_FILE="$USERNAME_DIR/username"
+if [ ! -d "$USERNAME_DIR" ]; then
+    mkdir -p "$USERNAME_DIR"
+fi
+if [ ! -f "$USERNAME_FILE" ]; then
+    printf '%s\n' "$USERNAME" > "$USERNAME_FILE"
+    chmod 644 "$USERNAME_FILE"
+    log "seeded $USERNAME_FILE = $USERNAME"
+fi
+
 # --- 1. Run the SSH user + filter setup ---
 if [ ! -x "${SCRIPTS_DIR}/unraid-readonly-ssh-setup.sh" ]; then
     log "ERROR: ${SCRIPTS_DIR}/unraid-readonly-ssh-setup.sh missing or not executable"
@@ -64,8 +99,8 @@ if [ ! -f "$ALLOWLIST_FILE" ]; then
     cat > "$ALLOWLIST_FILE" << 'ALLOWLIST'
 # claude-ssh allowlist — runtime config for the claude-write deploy channel.
 #
-# Controls which plugins and containers the `claude` SSH user is allowed to
-# write into. Both the SSH filter and the privileged writer read this file
+# Controls which plugins and containers the SSH user is allowed to write
+# into. Both the SSH filter and the privileged writer read this file
 # on every invocation; default-deny when empty or malformed.
 #
 # Format:
@@ -105,12 +140,12 @@ fi
 
 # --- 4. Smoke tests ---
 SMOKE_FAILED=0
-if ! id claude >/dev/null 2>&1; then
-    log "SMOKE FAIL: user 'claude' does not exist"
+if ! id "$USERNAME" >/dev/null 2>&1; then
+    log "SMOKE FAIL: user '$USERNAME' does not exist"
     SMOKE_FAILED=1
 fi
-if [ ! -f /home/claude/shell-filter.sh ]; then
-    log "SMOKE FAIL: /home/claude/shell-filter.sh missing"
+if [ ! -f "/home/$USERNAME/shell-filter.sh" ]; then
+    log "SMOKE FAIL: /home/$USERNAME/shell-filter.sh missing"
     SMOKE_FAILED=1
 fi
 if [ ! -x /usr/local/bin/claude-write ]; then
@@ -121,7 +156,7 @@ if [ ! -x /usr/local/sbin/claude-write-priv ]; then
     log "SMOKE FAIL: /usr/local/sbin/claude-write-priv missing"
     SMOKE_FAILED=1
 fi
-if [ ! -f /etc/sudoers.d/claude-write ] && ! grep -q '^claude ALL=' /etc/sudoers 2>/dev/null; then
+if [ ! -f /etc/sudoers.d/claude-write ] && ! grep -q "^$USERNAME ALL=" /etc/sudoers 2>/dev/null; then
     log "SMOKE FAIL: claude-write sudoers rule not installed"
     SMOKE_FAILED=1
 fi
