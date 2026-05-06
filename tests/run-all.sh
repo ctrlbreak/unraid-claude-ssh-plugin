@@ -19,6 +19,8 @@ TESTS=(
     test-username-configurable.sh
     test-idempotency.sh
     test-migration.sh
+    test-upgrade-path.sh
+    test-sudoers-drift.sh
     test-versions.sh
 )
 
