@@ -2,7 +2,9 @@
 
 ## Prerequisites
 
-- Unraid 6.10 or later (older versions untested).
+- Unraid 7.0 or later. Currently exercised against 7.2; earlier 7.x
+  releases should work but haven't been verified. Not supported on Unraid
+  6.x.
 - Root SSH access to the box (you'll need it to bootstrap the SSH key for the
   filtered user, and as an escape hatch if anything misconfigures).
 - A workstation with an SSH client and the ability to generate ED25519 keys.
