@@ -1,56 +1,74 @@
 #!/bin/bash
-# Deploy the claude-ssh plugin to the NAS.
+# Developer utility: build the .txz and install the plugin on a NAS over SSH.
+#
+# This is a convenience for plugin authors / contributors iterating against a
+# real Unraid box. End users should NOT use this — install via the web UI from
+# the release `.plg` URL instead (see docs/install.md).
 #
 # Usage:
-#   bash plugin-claude-ssh/deploy.sh          # quick: claude-write the plugin assets
-#   bash plugin-claude-ssh/deploy.sh --full   # full:  build .txz, install via plugin manager
+#   NAS_HOST=root@nas.local bash deploy.sh
 #
-# Quick mode goes through the existing claude-write channel (filter v7+) and
-# only updates the page/include/cfg files — no install hook runs, so changes
-# to install-runtime.sh / setup scripts are NOT picked up. Good for iterating
-# on the UI.
+# Behaviour:
+#   - Builds claude-ssh.txz via `make`.
+#   - Copies .txz + .plg to /boot/config/plugins/claude-ssh/ on the NAS via scp.
+#   - Runs `plugin install <plg> forced` on the NAS.
 #
-# Full mode rebuilds the .txz and runs `plugin install` as root, which:
-#   - extracts the package (overwriting any older version)
-#   - runs the .plg install hook (re-runs install-runtime.sh)
-#   - registers the plugin in /var/log/plugins/
-# Use --full when: install-runtime.sh changed, setup scripts changed,
-#   .plg changed, or any structural change that needs the install hook.
+# Requires: passwordless root SSH to the NAS. The `forced` flag re-installs
+# even if the plugin manager thinks the version is unchanged — useful when
+# the .plg version didn't bump but you want to redeploy a built .txz.
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+NAS="${NAS_HOST:-}"
 
-if [ "${1:-}" = "--full" ]; then
-    echo "==> Building .txz package..."
-    make -C "$REPO_ROOT/plugin-claude-ssh"
+if [ -z "$NAS" ]; then
+    cat <<EOF >&2
+ERROR: NAS_HOST not set. Pass it via env, e.g.:
 
-    echo "==> Uploading .txz and .plg to NAS via root SSH..."
-    NAS="root@192.168.0.3"
-    PLG="/boot/config/plugins/claude-ssh/claude-ssh.plg"
-    SSH_OPTS="-o ControlMaster=auto -o ControlPath=/tmp/ssh-deploy-%r@%h -o ControlPersist=30s"
+  NAS_HOST=root@nas.local bash deploy.sh
 
-    # Note: root SSH from this Mac sometimes fails (key-agent issues). If scp
-    # fails, fall through to a copy-paste path the user can run interactively.
-    if ! ssh $SSH_OPTS "$NAS" "mkdir -p /boot/config/plugins/claude-ssh"; then
-        cat <<'EOF' >&2
+End users should install via the release URL from the Unraid web UI:
 
-ERROR: root SSH to NAS failed. Run this manually from a console with key access:
+  https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/claude-ssh.plg
 
-  scp plugin-claude-ssh/claude-ssh.txz root@192.168.0.3:/boot/config/plugins/claude-ssh/
-  scp plugin-claude-ssh/claude-ssh.plg root@192.168.0.3:/boot/config/plugins/claude-ssh/
-  ssh root@192.168.0.3 'plugin install /boot/config/plugins/claude-ssh/claude-ssh.plg forced'
+(See docs/install.md for the user-facing install path.)
 EOF
-        exit 1
-    fi
-    scp $SSH_OPTS "$REPO_ROOT/plugin-claude-ssh/claude-ssh.txz" "$NAS:/boot/config/plugins/claude-ssh/"
-    scp $SSH_OPTS "$REPO_ROOT/plugin-claude-ssh/claude-ssh.plg" "$NAS:$PLG"
-
-    echo "==> Running plugin install..."
-    ssh $SSH_OPTS "$NAS" "plugin install $PLG forced"
-else
-    echo "==> Quick deploy via claude-write..."
-    bash "$REPO_ROOT/scripts/deploy-via-claude-write.sh" claude-ssh-quick
+    exit 1
 fi
+
+echo "==> Building .txz package..."
+make -C "$REPO_ROOT"
+
+# Render the .plg by substituting __MD5__ with the computed md5 — same as CI.
+# Without this the in-repo .plg fails plugin-install MD5 verification.
+md5=$(md5sum "$REPO_ROOT/claude-ssh.txz" 2>/dev/null | awk '{print $1}')
+[ -z "$md5" ] && md5=$(md5 -q "$REPO_ROOT/claude-ssh.txz" 2>/dev/null)
+if [ -z "$md5" ]; then
+    echo "ERROR: neither md5sum nor md5 available" >&2
+    exit 1
+fi
+PLG_RENDERED=$(mktemp)
+trap 'rm -f "$PLG_RENDERED"' EXIT
+sed "s/__MD5__/$md5/g" "$REPO_ROOT/claude-ssh.plg" > "$PLG_RENDERED"
+if grep -q '__MD5__' "$PLG_RENDERED"; then
+    echo "ERROR: __MD5__ placeholder still present after substitution" >&2
+    exit 1
+fi
+
+echo "==> Uploading .txz and .plg to $NAS..."
+PLG="/boot/config/plugins/claude-ssh/claude-ssh.plg"
+SSH_OPTS="-o ControlMaster=auto -o ControlPath=/tmp/ssh-deploy-%r@%h -o ControlPersist=30s"
+
+# shellcheck disable=SC2086
+ssh $SSH_OPTS "$NAS" "mkdir -p /boot/config/plugins/claude-ssh"
+# shellcheck disable=SC2086
+scp $SSH_OPTS "$REPO_ROOT/claude-ssh.txz" "$NAS:/boot/config/plugins/claude-ssh/"
+# shellcheck disable=SC2086
+scp $SSH_OPTS "$PLG_RENDERED" "$NAS:$PLG"
+
+echo "==> Running plugin install..."
+# shellcheck disable=SC2086
+ssh $SSH_OPTS "$NAS" "plugin install $PLG forced"
 
 echo "==> Done"

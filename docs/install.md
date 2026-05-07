@@ -17,14 +17,19 @@
    ```
 
 2. **Install the plugin** from the Unraid web UI → **Plugins** → **Install
-   Plugin**, paste the URL of the `.plg`:
+   Plugin**, paste the URL of the `.plg`. Always use a release URL — the
+   `main`-branch `.plg` is a template with an unrendered `__MD5__` placeholder
+   and won't install:
 
    ```
-   https://raw.githubusercontent.com/<owner>/claude-ssh-plugin/main/claude-ssh.plg
+   https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/claude-ssh.plg
    ```
 
-   (The release tag URL is preferable for production —
-   `https://github.com/<owner>/claude-ssh-plugin/releases/download/<tag>/claude-ssh.plg`.)
+   For production, pin to a specific release tag:
+
+   ```
+   https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v2026.05.06c/claude-ssh.plg
+   ```
 
    The plugin downloads the matching `.txz` package, extracts it to
    `/usr/local/emhttp/plugins/claude-ssh/`, and runs `install-runtime.sh`.

@@ -183,6 +183,7 @@ Topic-specific docs live under [`docs/`](docs/):
   rollback procedure, migration from v7/v8 and from manual install.
 - [`troubleshooting.md`](docs/troubleshooting.md) — The most common
   failures, with symptoms and fixes.
+- [`releasing.md`](docs/releasing.md) — How to cut a release (maintainers).
 
 Sample client + allowlist:
 
@@ -207,19 +208,13 @@ make test
 # Build the .txz package
 make
 
-# Quick deploy (UI tweaks only — no install hook re-run)
-bash deploy.sh
-
-# Full deploy (rebuild + plugin install — needed when setup scripts change)
-bash deploy.sh --full
+# Build + scp + plugin install on a NAS (developer convenience).
+NAS_HOST=root@nas.local bash deploy.sh
 ```
 
-For a fresh NAS install, host the `.plg` and `.txz` somewhere reachable
-(GitHub raw URL or a release tag) and run from the Unraid web UI:
-
-```
-plugin install <plg-url>
-```
+End users install from the Unraid web UI by pasting a release `.plg` URL —
+see [docs/install.md](docs/install.md). `deploy.sh` is a developer-only
+shortcut for iterating against a real NAS during plugin development.
 
 ## Uninstall
 

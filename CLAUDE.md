@@ -4,7 +4,7 @@
 
 > **DOC-SYNC RULE**: When you change anything user-visible (a new test, renamed/moved file, new category, deploy command, path) check whether the README, `.plg` CHANGES, or other in-repo docs reference what changed and update them in the same commit. Don't create new docs unless asked.
 
-> **SAFETY RULE — NO LIVE DEPLOYS WITHOUT EXPLICIT REQUEST**: This plugin is NOT yet running on a real Unraid box. Phase 5/6 changes are unit-tested but not live. Don't run `bash deploy.sh --full` or any NAS-write command unless the user explicitly asks. The frozen production deployment lives in a sibling repo (see "Cross-repo context" below) and is the user's only working install today.
+> **SAFETY RULE — NO LIVE DEPLOYS WITHOUT EXPLICIT REQUEST**: This plugin is NOT yet running on a real Unraid box. Phase 5/6 changes are unit-tested but not live. Don't run `NAS_HOST=... bash deploy.sh` or any NAS-write command unless the user explicitly asks. The frozen production deployment lives in a sibling repo (see "Cross-repo context" below) and is the user's only working install today.
 
 ## Project Overview
 
@@ -159,11 +159,10 @@ make test                    # run the full local test suite
 make                         # build claude-ssh.txz
 make clean                   # rm the built archive
 
-bash deploy.sh               # quick deploy (UI tweaks only — no plugin reinstall)
-bash deploy.sh --full        # full deploy (rebuild + plugin install hook re-run)
+NAS_HOST=root@nas.local bash deploy.sh   # build + scp + plugin install
 ```
 
-`deploy.sh` writes to a real NAS — only run when explicitly authorised. Currently no NAS has this version of the plugin installed; the user's NAS runs `homelab-scripts/plugin-claude-ssh/`.
+`deploy.sh` writes to a real NAS — only run when explicitly authorised. Currently no NAS has this version of the plugin installed; the user's NAS runs `homelab-scripts/plugin-claude-ssh/`. End users install via the release `.plg` URL, not via `deploy.sh`.
 
 ## Commit message style
 
