@@ -1,9 +1,28 @@
 # claude-ssh — Unraid plugin
 
-Packages the `claude` SSH user, filter v9, and `claude-write` deploy channel
-(writer v4) into a single Unraid plugin. Replaces the manual two-script
-install flow with one `.plg` URL, plus a Settings/Status tab for visibility
-into filter version, recent activity, and audit logs.
+Give Claude (or any other AI automation) a curated, read-only shell on
+your Unraid NAS so it can help you inspect, monitor, and operate the
+box — plus a narrow write channel for the cases where you want it to
+actually deploy something. Hand out one SSH key, and the holder can
+run **only** a fixed list of safe commands (`ls`, `cat`, `grep`, `find`,
+`du`, `df`, `ps`, `tar -t`, `curl` GET, `jq`, `awk`, and ~20 more) for
+diagnostics and inspection. No interactive shell. No PTY. No `sed -i`,
+no `find -exec`, no `curl -O`. Pipes work, scratch redirects to
+`/tmp/claude-*/` work, and everything is logged.
+
+When you want the AI to *change* something, the separate `claude-write`
+channel deploys files to allowlisted locations only — hook scripts into
+a container's `appdata/scripts/` dir, plugin assets into specific plugin
+directories, or ephemeral files in `/tmp`. Default-deny allowlist,
+regex-validated, atomic write with rotated backups, and a structured
+audit trail.
+
+Two layers of validation everywhere: an SSH-layer `command=` filter
+rejects unknown commands at login (advisory, fast); a privileged writer
+re-validates every write as enforcement. A Settings/Status tab in the
+Unraid web UI surfaces the filter version, recent activity, the
+configured allowlist (editable in-browser), and the live audit log —
+no shell needed once the plugin is installed.
 
 ## What it does
 
