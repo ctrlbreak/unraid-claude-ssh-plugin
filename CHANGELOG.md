@@ -8,6 +8,22 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.07a — 2026-05-07
+
+- **First public release.** Repo published at
+  [github.com/ctrlbreak/unraid-claude-ssh-plugin](https://github.com/ctrlbreak/unraid-claude-ssh-plugin).
+  Install from the Unraid web UI by pasting the release `.plg` URL:
+  `https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/claude-ssh.plg`.
+- `.plg` now points at the GitHub release for the matching version (rather
+  than expecting a side-loaded `.txz` on flash) and declares an `<MD5>` so
+  the plugin manager verifies integrity before extracting. CI substitutes
+  the real md5 into the in-repo `__MD5__` placeholder on tag push.
+- The Unraid plugin update check now resolves against
+  `releases/latest/download/claude-ssh.plg`, so installed instances detect
+  new releases automatically.
+- No runtime behaviour changes from `2026.05.06c` — filter `v9` and writer
+  `v4` unchanged. This release is the publishing event, not a feature.
+
 ## 2026.05.06c — 2026-05-06
 
 - Configurable SSH username (setup-time only). Setup scripts read

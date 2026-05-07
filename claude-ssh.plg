@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.06c">
+  <!ENTITY version   "2026.05.07a">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,20 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.07a
+- First public release. Repo published at
+  https://github.com/ctrlbreak/unraid-claude-ssh-plugin and the plugin is
+  installable from the Unraid web UI by pasting the release .plg URL:
+  https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/claude-ssh.plg
+- .plg now points at the GitHub release for the matching version (rather
+  than expecting a side-loaded .txz on flash) and declares an MD5 hash so
+  the plugin manager verifies integrity before extracting.
+- The Unraid plugin update check now resolves against
+  releases/latest/download/claude-ssh.plg, so installed instances detect new
+  releases automatically.
+- No runtime behaviour changes from 2026.05.06c — filter v9 and writer v4
+  unchanged. This release is the publishing event, not a feature.
+
 ###2026.05.06c
 - Configurable SSH username (setup-time only). Setup scripts read
   CLAUDE_SSH_USERNAME from env or /boot/config/plugins/claude-ssh/username
