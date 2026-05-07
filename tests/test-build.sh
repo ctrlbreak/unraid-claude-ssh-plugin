@@ -16,7 +16,7 @@ if [ ! -f "$PKG" ]; then
     echo "FAIL: $PKG not produced"
     exit 1
 fi
-echo "  built: $PKG ($(stat -f %z "$PKG" 2>/dev/null || stat -c %s "$PKG") bytes)"
+echo "  built: $PKG ($(stat -c %s "$PKG" 2>/dev/null || stat -f %z "$PKG") bytes)"
 
 EXPECTED=(
     "usr/local/emhttp/plugins/claude-ssh/ClaudeSsh.page"

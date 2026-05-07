@@ -513,7 +513,7 @@ fi
 
 # --- 6. Clean up old rbash approach if present ---
 # Remove artifacts from the previous rbash-based setup
-[ -d "$HOME_DIR/bin" ] && rm -rf "$HOME_DIR/bin" && echo "Removed old restricted bin directory."
+[ -d "$HOME_DIR/bin" ] && rm -rf "${HOME_DIR:?}/bin" && echo "Removed old restricted bin directory."
 [ -f "$HOME_DIR/.ssh/environment" ] && rm -f "$HOME_DIR/.ssh/environment" && echo "Removed old .ssh/environment."
 [ -e /bin/rbash ] && rm -f /bin/rbash && echo "Removed rbash symlink."
 # Switch shell from rbash to bash (command= handles restriction now)

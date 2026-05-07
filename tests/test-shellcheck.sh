@@ -23,7 +23,9 @@ SCRIPTS=(
 #   SC2155 - declare and assign separately (cosmetic)
 #   SC2002 - useless cat (we use it for clarity in some hook tests)
 #   SC1091 - source path not following (we don't always source)
-EXCLUDE="SC2155,SC2002,SC1091"
+#   SC2029 - variable expands client-side in `ssh host "cmd $var"` — fine when
+#            we control the variable (deploy.sh's $PLG is a fixed constant)
+EXCLUDE="SC2155,SC2002,SC1091,SC2029"
 FAIL=0
 
 for s in "${SCRIPTS[@]}"; do

@@ -180,7 +180,7 @@ assert_in     "dups.load.containers"     "$J" '"containers":["sonarr"]'
 # === 10. File mode is 644 ===
 CFG="$SANDBOX/mode.cfg"
 roundtrip 'foo' 'bar' "$CFG" >/dev/null
-MODE=$(stat -f '%A' "$CFG" 2>/dev/null || stat -c '%a' "$CFG" 2>/dev/null)
+MODE=$(stat -c '%a' "$CFG" 2>/dev/null || stat -f '%A' "$CFG" 2>/dev/null)
 if [ "$MODE" = "644" ]; then
     PASS=$((PASS+1))
 else
