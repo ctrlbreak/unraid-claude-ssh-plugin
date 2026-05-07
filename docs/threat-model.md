@@ -14,9 +14,9 @@ git repo, a compromised CI runner), the holder still cannot:
 
 - Log in to a shell. The SSH user's only shell is the filter
   (`/home/<user>/shell-filter.sh`) — no PTY, no interactive shell.
-- Run arbitrary commands. Only `claude-shell` (read-only inspection helpers)
-  and `claude-write` (this writer) are permitted; everything else is rejected
-  with a structured `BLOCKED` log.
+- Run arbitrary commands. Only the small allowlist documented in
+  [`filter.md`](filter.md) is accepted; everything else is rejected with a
+  structured `BLOCKED` log.
 - Write to `/boot/config/`. The SSH filter rejects any path under
   `/boot/config/` (the runtime allowlist lives there).
 - Write to filesystem locations not in the category map. Even `claude-write`

@@ -44,12 +44,14 @@ $ ssh claude@nas 'ls /etc/'
 BLOCKED [unknown command 'ls']
 ```
 
-**Likely cause:** the SSH filter only permits a small set of commands. `ls`,
-`cat`, `vim`, etc. are all rejected. Use `claude-shell <args>` for read-only
-inspection.
+**Likely cause:** the command isn't on the SSH filter's allowlist. `ls`,
+`cat`, `grep`, etc. are accepted; editors, shells, and most write commands
+are not.
 
-**Fix:** rephrase as `claude-shell …` or `claude-write …`. See
-[wire-protocol.md](wire-protocol.md) for the supported command shapes.
+**Fix:** rephrase using a command from the allowlist. See
+[`filter.md`](filter.md) for the full enumeration with flag restrictions
+and global rules; [`wire-protocol.md`](wire-protocol.md) covers the
+`claude-write` argv shapes.
 
 ## Writer rejection: "name not in allowlist"
 

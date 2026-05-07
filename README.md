@@ -190,6 +190,9 @@ Topic-specific docs live under [`docs/`](docs/):
 
 - [`install.md`](docs/install.md) — Step-by-step install via the Unraid
   web UI or shell, plus what gets laid down where.
+- [`filter.md`](docs/filter.md) — Every command the SSH filter allows,
+  with flag restrictions, global rules (no chaining, no command
+  substitution, restricted redirects), and useful invocation patterns.
 - [`categories.md`](docs/categories.md) — Full reference for every
   `claude-write` category: argv shape, target dir, allowed extensions,
   allowlist gate, worked examples.
