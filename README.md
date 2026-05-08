@@ -205,6 +205,8 @@ Topic-specific docs live under [`docs/`](docs/):
   rollback procedure, migration from v7/v8 and from manual install.
 - [`troubleshooting.md`](docs/troubleshooting.md) — The most common
   failures, with symptoms and fixes.
+- [`verifying.md`](docs/verifying.md) — How to run `verify-install.sh`,
+  the end-to-end smoke test for a live install.
 - [`releasing.md`](docs/releasing.md) — How to cut a release (maintainers).
 
 Sample client + allowlist:
@@ -237,6 +239,21 @@ NAS_HOST=root@nas.local bash deploy.sh
 End users install from the Unraid web UI by pasting a release `.plg` URL —
 see [docs/install.md](docs/install.md). `deploy.sh` is a developer-only
 shortcut for iterating against a real NAS during plugin development.
+
+## Verify your install
+
+After installing on a real NAS, run the end-to-end verification suite to
+confirm the filter, writer, sudoers, and audit log are all working:
+
+```bash
+ROOT_HOST=root@nas.local CLAUDE_HOST=claude@nas.local bash verify-install.sh
+```
+
+It runs ~35 cases across install state, filter behaviour, writer
+behaviour, audit log, and version parity, with inline fix hints on
+every failure. See [docs/verifying.md](docs/verifying.md) for the full
+prerequisites and output format. Repo-asset only — not in the `.txz`,
+runs from a checkout.
 
 ## Uninstall
 

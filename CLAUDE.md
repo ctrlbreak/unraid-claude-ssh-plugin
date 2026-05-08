@@ -160,9 +160,13 @@ make                         # build claude-ssh.txz
 make clean                   # rm the built archive
 
 NAS_HOST=root@nas.local bash deploy.sh   # build + scp + plugin install
+
+ROOT_HOST=root@nas CLAUDE_HOST=claude@nas bash verify-install.sh   # end-to-end verification (live NAS)
 ```
 
 `deploy.sh` writes to a real NAS — only run when explicitly authorised. Currently no NAS has this version of the plugin installed; the user's NAS runs `homelab-scripts/plugin-claude-ssh/`. End users install via the release `.plg` URL, not via `deploy.sh`.
+
+`verify-install.sh` is the end-to-end smoke test for a live install — repo-asset only (not in `.txz`), reads-only against the NAS apart from a few claude-write test files it cleans up. Same "only run when explicitly authorised" rule applies. Documented in [`docs/verifying.md`](docs/verifying.md).
 
 ## Commit message style
 

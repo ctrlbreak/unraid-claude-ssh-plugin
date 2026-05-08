@@ -17,6 +17,7 @@ SCRIPTS=(
     "$PLUGIN_SCRIPTS/install-runtime.sh"
     "$PLUGIN_SCRIPTS/uninstall-runtime.sh"
     "$ROOT/deploy.sh"
+    "$ROOT/verify-install.sh"
 )
 
 # Acceptable warnings/info codes that are noise for our patterns:
