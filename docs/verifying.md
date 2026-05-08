@@ -46,12 +46,14 @@ What it does **not** verify:
    as root. The script's pre-flight will fail-fast with exact
    instructions if either is missing.
 
-   The suite writes & cleans up files under
+   The suite writes test files under
    `/usr/local/emhttp/plugins/verify-test/` and
-   `/mnt/user/appdata/verify-test/scripts/`. Cleanup is idempotent —
-   safe to re-run. The directories themselves are left in place; you
-   can `rm -rf` them as root after if you want, and remove the two
-   allowlist entries.
+   `/mnt/user/appdata/verify-test/scripts/`. After Layer 5 finishes, the
+   suite **prints the exact `rm` command** it would run as root via SSH
+   and **prompts before executing it** (default no). You can let the
+   suite clean up, or copy the printed command and run it yourself. The
+   directories themselves are left in place; `rm -rf` them after if you
+   want, and remove the two allowlist entries.
 
 ## Running it
 
@@ -89,8 +91,25 @@ failure.
 ==========================================
   37 passed · 0 failed · 0 skipped
 ==========================================
-==> Cleanup: removed 6 test files
+
+==> Cleanup needed: 6 test file(s) were written on the NAS.
+    Files:
+      /tmp/claude-scratch/verify-1715120000-1.txt
+      /usr/local/emhttp/plugins/verify-test/scripts/verify-1715120000-2.sh
+      ... (4 more)
+
+    Proposed cleanup command (runs as root via SSH):
+      ssh root@nas.local rm -f /tmp/claude-scratch/verify-... /usr/local/emhttp/plugins/verify-test/scripts/verify-... ...
+
+    Run this cleanup now? [y/N]
 ```
+
+The cleanup prompt appears regardless of whether the suite passed or
+failed — files written during a partial Layer 3 run are still listed.
+Pressing Enter (or anything other than `y` / `yes`) skips cleanup; the
+exact `rm` command is left on screen for you to copy and run manually.
+Non-interactive invocations (no controlling terminal) skip the prompt
+and print the command without executing it.
 
 When something fails, you get an inline fix hint and a doc anchor:
 

@@ -175,11 +175,45 @@ section() {
 }
 
 cleanup() {
-    if [ ${#WRITTEN_FILES[@]} -gt 0 ]; then
-        # shellcheck disable=SC2029
-        ssh_root "rm -f ${WRITTEN_FILES[*]}" >/dev/null 2>&1 || true
-        printf '\n==> Cleanup: removed %d test files\n' "${#WRITTEN_FILES[@]}"
+    [ ${#WRITTEN_FILES[@]} -eq 0 ] && return
+
+    local rm_args
+    rm_args="rm -f"
+    for f in "${WRITTEN_FILES[@]}"; do
+        rm_args="$rm_args $(printf '%q' "$f")"
+    done
+
+    echo
+    echo "==> Cleanup needed: ${#WRITTEN_FILES[@]} test file(s) were written on the NAS."
+    echo "    Files:"
+    for f in "${WRITTEN_FILES[@]}"; do
+        printf '      %s\n' "$f"
+    done
+    echo
+    echo "    Proposed cleanup command (runs as root via SSH):"
+    printf '      ssh %s %s\n' "$ROOT_HOST" "$rm_args"
+    echo
+
+    if [ ! -t 0 ]; then
+        echo "    (non-interactive shell — skipping cleanup; copy the command above to run it manually)"
+        return
     fi
+
+    printf '    Run this cleanup now? [y/N] '
+    local answer=""
+    read -r answer || true
+    case "$answer" in
+        [yY]|[yY][eE][sS])
+            if ssh_root "$rm_args" >/dev/null 2>&1; then
+                printf '    Removed %d files.\n' "${#WRITTEN_FILES[@]}"
+            else
+                echo "    WARN: cleanup command failed — some files may remain. Re-run the command above manually."
+            fi
+            ;;
+        *)
+            echo "    Skipped — copy the command above to remove the files manually."
+            ;;
+    esac
 }
 trap cleanup EXIT
 
