@@ -116,8 +116,11 @@ Boot persistence:
 After install, the **Settings → Claude SSH** tab should show:
 
 - **Health KPI:** "User &lt;configured&gt; ready" with a green dot.
-- **Filter version:** `v9` (parsed from the live `/home/<user>/shell-filter.sh`).
-- **Writer version:** `v4` (parsed from the live `/usr/local/sbin/claude-write-priv`).
+- **Filter version** and **Writer version:** match the `FILTER_VERSION` and
+  `WRITER_VERSION` declared at the top of the packaged setup scripts
+  (`scripts/unraid-readonly-ssh-setup.sh` and `scripts/claude-write-setup.sh`).
+  These are runtime contract markers; the Status page parses them out of the
+  live `/home/<user>/shell-filter.sh` and `/usr/local/sbin/claude-write-priv`.
 - **Audit Log:** empty until the first write happens.
 
 If any of these are missing, see [troubleshooting.md](troubleshooting.md).

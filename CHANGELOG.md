@@ -8,6 +8,30 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.12d — 2026-05-12
+
+- **Centralise filter/writer version literals.** Each setup script now
+  declares its runtime-contract version as a single shell variable at
+  the top (`FILTER_VERSION` / `WRITER_VERSION`). Install banners and
+  `exec.php`'s Status-page parser both read that one assignment, so a
+  hardcoded `vN` literal in an install banner can no longer go stale
+  after a bump (the bug class that produced "stale v7 banner" in
+  `2026.05.12a`).
+- **New `tests/test-version-drift.sh`.** Scans user-facing docs for
+  current-tense filter/writer version claims (badges, diagram
+  annotations, sample-output lines) and fails CI if any disagrees
+  with canonical. Targeted patterns only — release-history files
+  (`CHANGELOG.md`, `.plg` `<CHANGES>`) and prose mentions of past
+  versions are not scanned.
+- **Drift-affected docs cleaned up.** `docs/install.md`,
+  `docs/threat-model.md`, `docs/verifying.md`,
+  `docs/troubleshooting.md`, `docs/wire-protocol.md`, and
+  `docs/categories.md` now reference `FILTER_VERSION` /
+  `WRITER_VERSION` (or omit the version) rather than naming a
+  specific value that drifts. The README "Versions" section was
+  replaced with a "Versioning" rationale in the same pass.
+- No filter/writer version bump — runtime artifacts unchanged.
+
 ## 2026.05.12c — 2026-05-12
 
 - **Move allowlist off `/boot/config`.** Filter `v9 → v10`, writer

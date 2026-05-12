@@ -2,7 +2,6 @@
 # =============================================================================
 # Unraid: Create a read-only SSH user for Claude Code
 # =============================================================================
-# Filter version: v10
 # Uses authorized_keys command= restriction to force all SSH commands through
 # a filter script. Simpler and more secure than rbash — single enforcement
 # point that blocks destructive commands, dangerous flags, and shell tricks.
@@ -18,6 +17,13 @@
 # =============================================================================
 
 set -euo pipefail
+
+# Filter version — single source of truth for the runtime filter contract.
+# Bump ONLY when the heredoc'd filter logic below changes (the script written
+# to /home/<user>/shell-filter.sh). Setup-script edits outside the heredoc
+# don't bump this. Read by exec.php (readVersionMarker), used by the install
+# banner below, asserted by tests/test-versions.sh.
+FILTER_VERSION="v10"
 
 # --- Resolve SSH username (configurable, setup-time only) ----------------
 # Precedence: CLAUDE_SSH_USERNAME env var > /boot/config/plugins/claude-ssh/
@@ -538,7 +544,7 @@ echo "=========================================="
 echo ""
 echo "Security:"
 echo "  Auth:       SSH key only (password locked)"
-echo "  Filter:     $FILTER_SCRIPT v10 (root-owned, validates every command)"
+echo "  Filter:     $FILTER_SCRIPT $FILTER_VERSION (root-owned, validates every command)"
 echo "  Audit:      every command logged to syslog (tag: claude-shell)"
 echo "  Allowlist:  ls, find, cat, grep, df, du, ps, curl (GET), jq, numfmt, mkdir,"
 echo "              ln, xargs, zcat, tar, getent, groups, last, who, etc."

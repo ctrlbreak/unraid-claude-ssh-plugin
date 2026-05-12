@@ -107,7 +107,7 @@ exist on stock Unraid.
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  SSH layer: command="" filter (advisory)         │ ← filter v9
+│  SSH layer: command="" filter (advisory)         │
 │  - argv parse                                    │
 │  - category enum                                 │
 │  - basename / target-name regex                  │
@@ -131,7 +131,7 @@ exist on stock Unraid.
                        │
                        ▼
 ┌──────────────────────────────────────────────────┐
-│  Privileged writer (enforcement)                 │ ← writer v4
+│  Privileged writer (enforcement)                 │
 │  - re-validate category, target name, basename   │
 │  - re-read allowlist                             │
 │  - hardened env (PATH pinned, LD_* dropped)      │

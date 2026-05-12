@@ -150,7 +150,12 @@ default:
 // Helpers
 // ---------------------------------------------------------------------------
 
-function readVersionMarker($path, $marker) {
+// Read a shell-variable assignment of the form `VAR="vN"` or `VAR=vN` from
+// the top of a setup script. This is the single source of truth for the
+// filter and writer runtime contract versions — same value the script uses
+// for its install banner, so the Status page can't drift from what was
+// printed at install time.
+function readVersionMarker($path, $varName) {
     if (!is_readable($path)) return null;
     $h = @fopen($path, 'r');
     if (!$h) return null;
@@ -158,7 +163,7 @@ function readVersionMarker($path, $marker) {
     $lines = 0;
     while (($line = fgets($h)) !== false && $lines < 200) {
         $lines++;
-        if (preg_match('/^\s*#\s*' . preg_quote($marker, '/') . '\s*:\s*(v\d+(?:\.\d+)*)\s*$/', $line, $m)) {
+        if (preg_match('/^\s*' . preg_quote($varName, '/') . '="?(v\d+(?:\.\d+)*)"?\s*$/', $line, $m)) {
             $version = $m[1];
             break;
         }
@@ -206,8 +211,8 @@ function buildStatus($scriptsDir, $pluginPlg, $paths, $username = 'claude') {
     // Versions: read from the canonical source scripts that the plugin packages.
     // The runtime filter at /home/<user>/shell-filter.sh is an expansion of the
     // setup script's heredoc — same logic, different path.
-    $filterVer = readVersionMarker("$scriptsDir/unraid-readonly-ssh-setup.sh", 'Filter version');
-    $writerVer = readVersionMarker("$scriptsDir/claude-write-setup.sh",       'Writer version');
+    $filterVer = readVersionMarker("$scriptsDir/unraid-readonly-ssh-setup.sh", 'FILTER_VERSION');
+    $writerVer = readVersionMarker("$scriptsDir/claude-write-setup.sh",       'WRITER_VERSION');
     $pluginVer = pluginVersion($pluginPlg);
 
     // User existence: check /etc/passwd directly (no need to fork id).
@@ -372,7 +377,7 @@ function buildAuditLog($dateFilter, $tagFilter, $maxLines) {
 }
 
 function buildDashboard($scriptsDir, $paths, $username = 'claude') {
-    $filterVer = readVersionMarker("$scriptsDir/unraid-readonly-ssh-setup.sh", 'Filter version');
+    $filterVer = readVersionMarker("$scriptsDir/unraid-readonly-ssh-setup.sh", 'FILTER_VERSION');
     $userExists = false;
     $passwd = @file_get_contents('/etc/passwd');
     if ($passwd !== false) $userExists = (bool)preg_match('/^' . preg_quote($username, '/') . ':/m', $passwd);

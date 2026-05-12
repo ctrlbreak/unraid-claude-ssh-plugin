@@ -22,6 +22,7 @@ TESTS=(
     test-upgrade-path.sh
     test-sudoers-drift.sh
     test-versions.sh
+    test-version-drift.sh
 )
 
 PASS=0

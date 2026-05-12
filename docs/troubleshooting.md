@@ -96,8 +96,9 @@ the [categories reference](categories.md) for the full table.
 
 ## Status tab: filter / writer version mismatch
 
-**Symptom:** Settings → Claude SSH → Status shows `filter v7` even though the
-plugin says `2026.05.06c` (which ships filter v9).
+**Symptom:** Settings → Claude SSH → Status shows an older filter or writer
+version than what the installed plugin's setup scripts declare
+(`FILTER_VERSION` / `WRITER_VERSION` at the top of `scripts/*.sh`).
 
 **Likely cause:** the live filter at `/home/<user>/shell-filter.sh` is stale.
 This happens if a manual install pre-dates the plugin and the plugin's
@@ -122,7 +123,7 @@ grep -E "Claude (read-only|write deploy)" /boot/config/go
 ```
 
 If there are legacy lines, they're getting re-applied on every boot and
-overwriting the v9 filter. Manual cleanup:
+overwriting the packaged filter. Manual cleanup:
 
 ```bash
 sed -i '/^# Claude read-only SSH user setup$/,/^$/d; /^# Claude write deploy channel$/,/^$/d' /boot/config/go

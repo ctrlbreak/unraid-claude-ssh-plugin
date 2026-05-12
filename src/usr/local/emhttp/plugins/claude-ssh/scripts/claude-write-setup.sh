@@ -2,7 +2,6 @@
 # =============================================================================
 # Unraid: Install the `claude-write` deploy channel
 # =============================================================================
-# Writer version: v5
 # Lets the read-only `claude` SSH user write specific files (hooks, plugin
 # assets) to a small set of pre-approved locations on the NAS.
 #
@@ -15,10 +14,10 @@
 #   /etc/sudoers.d/claude-write       — NOPASSWD rule for `claude` -> privileged
 #
 # Flow:
-#   ssh claude@nas 'claude-write hook-sonarr foo.sh' < hook.sh
-#     -> filter v5 validates command + category + basename (claude-shell log)
+#   ssh claude@nas 'claude-write appdata-script sonarr foo.sh' < hook.sh
+#     -> the SSH filter validates command + category + basename (claude-shell log)
 #     -> bash resolves `claude-write` to /usr/local/bin/claude-write (wrapper)
-#     -> wrapper execs `sudo /usr/local/sbin/claude-write-priv hook-sonarr foo.sh`
+#     -> wrapper execs `sudo /usr/local/sbin/claude-write-priv appdata-script sonarr foo.sh`
 #     -> sudoers permits exactly that pattern (no shell, no extra args)
 #     -> privileged writer re-validates, backs up old file, atomic write,
 #        logs WROTE/REJECTED to syslog (claude-write tag)
@@ -32,6 +31,13 @@
 # =============================================================================
 
 set -euo pipefail
+
+# Writer version — single source of truth for the privileged writer contract.
+# Bump ONLY when the heredoc'd writer logic below (cat > "$PRIV_PATH" ...)
+# changes. Setup-script edits outside that heredoc don't bump this. Read by
+# exec.php (readVersionMarker), used by the install banner below, asserted by
+# tests/test-versions.sh.
+WRITER_VERSION="v5"
 
 # Auto-detect plugin invocation (see unraid-readonly-ssh-setup.sh for rationale).
 SELF_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
@@ -444,7 +450,9 @@ echo "=========================================="
 echo "  claude-write deploy channel installed"
 echo "=========================================="
 echo ""
-echo "Categories (v9):"
+echo "  Writer:     $PRIV_PATH $WRITER_VERSION (root-owned, re-validates every write)"
+echo ""
+echo "Categories:"
 echo "  Simple — claude-write <cat> <basename>:"
 echo "    scratch         -> /tmp/claude-scratch/               (.sh .py .txt .json .log .conf .md)"
 echo ""
@@ -473,4 +481,4 @@ echo ""
 echo "Audit log:"
 echo "  grep claude-write /var/log/syslog"
 echo ""
-echo "NEXT: redeploy unraid-readonly-ssh-setup.sh (filter v10 matches writer v5)"
+echo "NEXT: redeploy unraid-readonly-ssh-setup.sh so filter and writer stay in lockstep"

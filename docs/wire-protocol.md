@@ -165,10 +165,13 @@ updating; patch-level changes preserve argv shapes and exit codes.
 
 | Writer version | Change |
 |---|---|
-| `v4` (current) | Collapsed `hook-sonarr` / `hook-radarr` into `appdata-script <container>`. |
+| `v5` | Allowlist moved off `/boot/config` (FAT mount blocks the SSH user from reading) to `/mnt/user/appdata/claude-ssh/`. |
+| `v4` | Collapsed `hook-sonarr` / `hook-radarr` into `appdata-script <container>`. |
 | `v3` | Plugin-name allowlist moved to runtime config. |
 | `v2` | Plugin-name parameterised; new `scratch` category. |
 | `v1` | Initial. |
 
-The filter and writer versions are coupled — every release bumps both
-together when the contract surface changes.
+The current writer version is whatever `WRITER_VERSION` is set to at the top
+of `claude-write-setup.sh` (and shown on the Status tab once installed).
+Filter and writer versions tend to move together — every release bumps both
+when the contract surface changes.

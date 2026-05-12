@@ -41,15 +41,38 @@ The setup scripts auto-detect plugin invocation (path starts with
 `/usr/local/emhttp/plugins/`) and skip their own self-persistence — boot
 hooks are managed by the plugin so there's a single source of truth.
 
-## Versions
+## Versioning
 
-- **Plugin:** `2026.05.12c` (date-based, single source in `claude-ssh.plg`)
-- **Filter:** `v10` — parsed from a `# Filter version:` comment in the setup script
-- **Writer:** `v5` — parsed from a `# Writer version:` comment in the setup script
+Three independent version markers, each bumped only when the thing it
+represents actually changes:
 
-Bumping plugin version: edit one entity in `claude-ssh.plg`. Bumping filter or
-writer version: edit the comment + the relevant logic, then bump plugin version
-too. The Status page surfaces all three.
+- **Plugin version** — date-based (`YYYY.MM.DD[a-z]`), single source in
+  `claude-ssh.plg`. Bumped on every user-visible change that ships in the
+  package (a source script, a page, a packaged doc). Test-only or repo-asset
+  changes don't bump it.
+- **Filter version** — `vN`, declared as a single `FILTER_VERSION="vN"`
+  assignment at the top of `unraid-readonly-ssh-setup.sh`. Bumped **only**
+  when the runtime filter heredoc — the script that ends up at
+  `/home/<user>/shell-filter.sh` — changes. Setup-script edits outside the
+  heredoc don't bump it. The install banner and `exec.php`'s Status-page
+  parser both read this one assignment, so the printed version and the
+  Status-page version can't diverge.
+- **Writer version** — `vN`, declared as a single `WRITER_VERSION="vN"`
+  assignment at the top of `claude-write-setup.sh`. Same rule: bumps only
+  when the runtime writer (`/usr/local/sbin/claude-write-priv`) changes.
+
+The split exists because filter and writer are **runtime contracts**, not
+package metadata. The Status page surfaces all three so an operator can tell
+at a glance whether the layer that actually enforces things (filter, writer)
+moved, independent of cosmetic plugin churn. A release that only touches docs
+or the Settings UI bumps the plugin version but leaves filter/writer at the
+same numbers; a one-line change to a regex inside the filter bumps the filter
+version even when nothing else moves. Bumping filter or writer version
+implies bumping the plugin version too (the runtime artifact is shipping
+inside a new package), but not the reverse.
+
+The current numbers live in `claude-ssh.plg`, on the Settings → claude-ssh
+page once installed, and in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Categories
 
@@ -73,10 +96,9 @@ claude-write plugin-cfg     <plugin-name> <basename>   → /usr/local/emhttp/plu
 claude-write appdata-script <container> <basename>     → /mnt/user/appdata/<container>/scripts/
 ```
 
-Replaces v7's `hook-sonarr` / `hook-radarr` categories with one generic
-form. Useful for any *arr-style app: Sonarr, Radarr, Bazarr, Lidarr,
-Prowlarr, Tdarr, autobrr, and the long tail of containers that keep their
-hooks under `/mnt/user/appdata/<container>/scripts/`.
+One generic form covers any *arr-style app: Sonarr, Radarr, Bazarr,
+Lidarr, Prowlarr, Tdarr, autobrr, and the long tail of containers that
+keep their hooks under `/mnt/user/appdata/<container>/scripts/`.
 
 ## Runtime allowlist
 
@@ -167,23 +189,6 @@ pick. Only the user creation and the sudoers principal change.
 file, then reinstall. The old user account stays around; remove it
 manually with `userdel <old-user>` if no longer needed.
 
-## Migrating from filter v7 / v8 (`hook-sonarr` / `hook-radarr`)
-
-If you were using the legacy hook categories:
-
-```
-# Old (v7 / v8)
-ssh claude@nas 'claude-write hook-sonarr foo.sh' < foo.sh
-ssh claude@nas 'claude-write hook-radarr foo.sh' < foo.sh
-
-# New (v9)
-ssh claude@nas 'claude-write appdata-script sonarr foo.sh' < foo.sh
-ssh claude@nas 'claude-write appdata-script radarr foo.sh' < foo.sh
-```
-
-Add `container sonarr` / `container radarr` (or whichever you need) to
-`/mnt/user/appdata/claude-ssh/allowlist.cfg`.
-
 ## Documentation
 
 Topic-specific docs live under [`docs/`](docs/):
@@ -202,7 +207,7 @@ Topic-specific docs live under [`docs/`](docs/):
 - [`wire-protocol.md`](docs/wire-protocol.md) — Argv shapes, validation
   regex, exit codes, syslog format. The contract surface for clients.
 - [`upgrading.md`](docs/upgrading.md) — Upgrade flow, what's preserved,
-  rollback procedure, migration from v7/v8 and from manual install.
+  rollback procedure, and migration from a manual install.
 - [`troubleshooting.md`](docs/troubleshooting.md) — The most common
   failures, with symptoms and fixes.
 - [`verifying.md`](docs/verifying.md) — How to run `verify-install.sh`,

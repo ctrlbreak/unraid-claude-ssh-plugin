@@ -89,7 +89,7 @@ failure.
 ```
 ==> claude-ssh verification suite
 ==> ROOT_HOST=root@nas.local  CLAUDE_HOST=claude@nas.local
-==> Expected versions: filter=v9 writer=v4
+==> Expected versions: filter=$FILTER_VERSION writer=$WRITER_VERSION
 ==> Pre-flight: SSH connectivity OK · username=claude · allowlist has verify-test entries OK
 
 [Layer 1 — Install state]

@@ -93,8 +93,8 @@ cat my-hook.sh | ssh claude@nas \
 # → /mnt/user/appdata/sonarr/scripts/post-import.sh   mode 755
 ```
 
-Replaces v7's `hook-sonarr` / `hook-radarr` categories. Works for any
-container that keeps hooks under `/mnt/user/appdata/<container>/scripts/`.
+Works for any container that keeps hooks under
+`/mnt/user/appdata/<container>/scripts/`.
 
 ## Why these categories?
 
@@ -110,7 +110,8 @@ If you need a category that doesn't fit the table:
   (writer source), and `include/exec.php` (counter row).
 - Update `tests/test-sudoers-drift.sh` — the cross-check ensures all four
   sites stay in lockstep.
-- Bump the writer version (`v4` → `v5`) since the runtime contract changed.
+- Bump `WRITER_VERSION` (and `FILTER_VERSION` if the filter side changed too)
+  at the top of the setup script — the runtime contract just moved.
 - Add an entry to `CHANGELOG.md` and `claude-ssh.plg`'s `<CHANGES>` block.
 
 That's a deliberate barrier — categories are a security surface, not a config
