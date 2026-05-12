@@ -8,6 +8,29 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.13a — 2026-05-12
+
+- **Dashboard tile redesign.** Adopts the Unraid 7.x `$mytiles[column1]`
+  API so the tile now sits inside the dashboard's column grid (half-width
+  like every other tile) instead of rendering as a full-width banner above
+  the columns. Gated on Unraid 6.12+ via the `Cond=` page header; older
+  versions silently skip the tile.
+- **Richer tile content.** Shows installation health (user, filter, writer,
+  sudoers, SSH-key count) as inline tick/cross badges, 24h activity broken
+  out into accepted / blocked / writes / rejected, and the allowlist size
+  (plugins + containers). Status verdict pill (Healthy / Healthy · activity
+  blocked / Not installed) sits in the tile-header subtitle. SSH-key label
+  correctly pluralises ("1 SSH key" vs "2 SSH keys").
+- **Backend `dashboard` action** returns one richer JSON blob per 60s poll
+  — same single AJAX call, no extra backend load. Allowlist counts derive
+  from the same `load_allowlist_file()` the Settings UI uses, so the tile
+  and editor cannot disagree on the count. The legacy `writes_24h` /
+  `blocked_24h` aliases are dropped (only the dashboard tile consumed them).
+- **New `tests/test-dashboard-action.sh`** pins the JSON shape (19 cases).
+  Sandbox-only PHP test; skips with `exit 77` if `php` is missing.
+- No filter/writer version bump — runtime artifacts (the heredoc'd filter
+  and writer) are byte-identical with `2026.05.12c`.
+
 ## 2026.05.12e — 2026-05-12
 
 - **Simplified install banners.** The SSH-setup script's "Setup
