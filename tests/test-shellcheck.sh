@@ -28,7 +28,8 @@ SCRIPTS=(
 #            we control the variable (deploy.sh's $PLG is a fixed constant)
 #   SC2317 - "command appears unreachable" — fires on trap-invoked functions
 #            (verify-install.sh's cleanup()) which shellcheck can't see called.
-EXCLUDE="SC2155,SC2002,SC1091,SC2029,SC2317"
+#   SC2329 - "this function is never invoked" — same root cause as SC2317.
+EXCLUDE="SC2155,SC2002,SC1091,SC2029,SC2317,SC2329"
 FAIL=0
 
 for s in "${SCRIPTS[@]}"; do

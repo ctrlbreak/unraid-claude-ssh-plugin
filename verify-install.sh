@@ -382,6 +382,7 @@ else
 fi
 
 # 2.7 blocked: command substitution
+# shellcheck disable=SC2016  # intentional — sending literal $(...) through filter
 out=$(ssh_claude 'echo $(id)' 2>&1 || true)
 if printf '%s' "$out" | grep -q 'BLOCKED'; then
     record_pass "2.7" "blocked: \$(...) command substitution"
