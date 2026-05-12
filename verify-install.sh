@@ -114,12 +114,14 @@ fi
 FILTER_SRC="$REPO_ROOT/src/usr/local/emhttp/plugins/claude-ssh/scripts/unraid-readonly-ssh-setup.sh"
 WRITER_SRC="$REPO_ROOT/src/usr/local/emhttp/plugins/claude-ssh/scripts/claude-write-setup.sh"
 
-EXPECTED_FILTER_VERSION=$(grep -m1 -E '^# Filter version:' "$FILTER_SRC" 2>/dev/null | awk '{print $4}')
-EXPECTED_WRITER_VERSION=$(grep -m1 -E '^# Writer version:' "$WRITER_SRC" 2>/dev/null | awk '{print $4}')
+EXPECTED_FILTER_VERSION=$(grep -m1 -E '^FILTER_VERSION=' "$FILTER_SRC" 2>/dev/null \
+    | sed -E 's/^FILTER_VERSION="?(v[0-9]+(\.[0-9]+)*)"?.*$/\1/')
+EXPECTED_WRITER_VERSION=$(grep -m1 -E '^WRITER_VERSION=' "$WRITER_SRC" 2>/dev/null \
+    | sed -E 's/^WRITER_VERSION="?(v[0-9]+(\.[0-9]+)*)"?.*$/\1/')
 
 if [ -z "$EXPECTED_FILTER_VERSION" ] || [ -z "$EXPECTED_WRITER_VERSION" ]; then
     echo "ERROR: could not read expected versions from local repo" >&2
-    echo "       expected '# Filter version: vN' / '# Writer version: vN' headers" >&2
+    echo "       expected FILTER_VERSION=\"vN\" / WRITER_VERSION=\"vN\" at the top of the setup scripts" >&2
     exit 1
 fi
 
@@ -339,8 +341,10 @@ fi
 # (/home/<user>/shell-filter.sh, /usr/local/sbin/claude-write-priv) don't
 # carry the marker; it lives only in the source setup scripts.
 DEPLOYED_SCRIPTS_DIR="/usr/local/emhttp/plugins/claude-ssh/scripts"
-deployed_filter_v=$(ssh_root "grep -m1 -E '^# Filter version:' $DEPLOYED_SCRIPTS_DIR/unraid-readonly-ssh-setup.sh 2>/dev/null | awk '{print \$4}'" || true)
-deployed_writer_v=$(ssh_root "grep -m1 -E '^# Writer version:' $DEPLOYED_SCRIPTS_DIR/claude-write-setup.sh 2>/dev/null | awk '{print \$4}'" || true)
+deployed_filter_v=$(ssh_root "grep -m1 -E '^FILTER_VERSION=' $DEPLOYED_SCRIPTS_DIR/unraid-readonly-ssh-setup.sh 2>/dev/null" \
+    | sed -E 's/^FILTER_VERSION="?(v[0-9]+(\.[0-9]+)*)"?.*$/\1/' || true)
+deployed_writer_v=$(ssh_root "grep -m1 -E '^WRITER_VERSION=' $DEPLOYED_SCRIPTS_DIR/claude-write-setup.sh 2>/dev/null" \
+    | sed -E 's/^WRITER_VERSION="?(v[0-9]+(\.[0-9]+)*)"?.*$/\1/' || true)
 
 if [ "$deployed_filter_v" = "$EXPECTED_FILTER_VERSION" ] && [ "$deployed_writer_v" = "$EXPECTED_WRITER_VERSION" ]; then
     record_pass "1.10" "deployed versions match repo (filter=$deployed_filter_v writer=$deployed_writer_v)"
