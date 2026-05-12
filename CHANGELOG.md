@@ -8,6 +8,28 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.12b — 2026-05-12
+
+- **Fix allowlist unreadable by constrained user.** `install-runtime.sh`
+  now explicitly `chmod 755 /boot/config/plugins/claude-ssh/`
+  (idempotent — fixes existing installs where the dir was created with
+  mode 700 from an earlier root umask). Without world-execute on the
+  dir, the SSH filter silently default-denies every
+  `claude-write plugin-*` and `claude-write appdata-script` invocation
+  because it can't stat `allowlist.cfg`. Surfaced during first live
+  deploy: every Layer-3 write in `verify-install.sh` was rejected as
+  "not in allowlist" despite the entries being present.
+- `verify-install.sh` improvements: read version markers from the
+  setup-script headers in `/usr/local/emhttp/plugins/.../scripts/`
+  (matches `exec.php`); expect `authorized_keys` as `root:root 644`
+  (the plugin's deliberately-locked posture, not the stock
+  `claude:users 600`); accept both `BLOCKED` (filter) and `REJECTED`
+  (writer) as valid rejection signals in Layer 3; new case 1.11
+  exercises the constrained user actually reading `allowlist.cfg`;
+  Layer 5.3 skips instead of failing when the bare-curl status
+  endpoint isn't reachable without a web-UI session.
+- No filter/writer version bump — runtime artifacts unchanged.
+
 ## 2026.05.12a — 2026-05-12
 
 - **Fix `.plg` FILE block ordering.** The `&pkgURL;` download block now

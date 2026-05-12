@@ -62,6 +62,12 @@ USERNAME_FILE="$USERNAME_DIR/username"
 if [ ! -d "$USERNAME_DIR" ]; then
     mkdir -p "$USERNAME_DIR"
 fi
+# The constrained SSH user reads allowlist.cfg from this dir on every filter
+# invocation. Without world-execute on the dir, the filter silently
+# default-denies all plugin/container writes (can't enter dir → can't stat
+# the file). Idempotent: fixes existing installs where the dir was created
+# with a stricter umask (mode 700 from `mkdir` under root's tightened umask).
+chmod 755 "$USERNAME_DIR"
 if [ ! -f "$USERNAME_FILE" ]; then
     printf '%s\n' "$USERNAME" > "$USERNAME_FILE"
     chmod 644 "$USERNAME_FILE"

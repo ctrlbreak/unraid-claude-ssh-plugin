@@ -303,13 +303,15 @@ else
         "#status-tab-user-claude-not-ready"
 fi
 
-# 1.7 authorized_keys present, mode 600
+# 1.7 authorized_keys present, root-owned 644 — this plugin deliberately
+# locks the file to root so the constrained user can't add their own keys
+# (the install banner says: "auth files locked to root").
 akstat=$(ssh_root "stat -c '%U:%G %a' /home/$USERNAME/.ssh/authorized_keys 2>/dev/null" || true)
-if [ "${akstat##* }" = "600" ] && [ "${akstat%% *}" = "$USERNAME:users" ]; then
-    record_pass "1.7" "authorized_keys present ($USERNAME:users 600)"
+if [ "$akstat" = "root:root 644" ]; then
+    record_pass "1.7" "authorized_keys present (root:root 644 — locked posture)"
 else
-    record_fail "1.7" "authorized_keys missing or wrong perms (got: ${akstat:-not found})" \
-        "chown $USERNAME:users + chmod 600 the file as root" \
+    record_fail "1.7" "authorized_keys missing or wrong perms (got: ${akstat:-not found}; expected: root:root 644)" \
+        "re-run install-runtime.sh as root to restore the locked posture" \
         "#ssh-connection-permission-denied-publickey"
 fi
 
@@ -331,9 +333,14 @@ else
         "#status-tab-user-claude-not-ready"
 fi
 
-# 1.10 deployed filter/writer versions match local repo
-deployed_filter_v=$(ssh_root "grep -m1 -E '^# Filter version:' /home/$USERNAME/shell-filter.sh 2>/dev/null | awk '{print \$4}'" || true)
-deployed_writer_v=$(ssh_root "grep -m1 -E '^# Writer version:' /usr/local/sbin/claude-write-priv 2>/dev/null | awk '{print \$4}'" || true)
+# 1.10 deployed filter/writer versions match local repo. We read the marker
+# from the setup-script headers in the plugin tree — same path exec.php's
+# readVersionMarker() uses for the Status tab. The runtime-deployed files
+# (/home/<user>/shell-filter.sh, /usr/local/sbin/claude-write-priv) don't
+# carry the marker; it lives only in the source setup scripts.
+DEPLOYED_SCRIPTS_DIR="/usr/local/emhttp/plugins/claude-ssh/scripts"
+deployed_filter_v=$(ssh_root "grep -m1 -E '^# Filter version:' $DEPLOYED_SCRIPTS_DIR/unraid-readonly-ssh-setup.sh 2>/dev/null | awk '{print \$4}'" || true)
+deployed_writer_v=$(ssh_root "grep -m1 -E '^# Writer version:' $DEPLOYED_SCRIPTS_DIR/claude-write-setup.sh 2>/dev/null | awk '{print \$4}'" || true)
 
 if [ "$deployed_filter_v" = "$EXPECTED_FILTER_VERSION" ] && [ "$deployed_writer_v" = "$EXPECTED_WRITER_VERSION" ]; then
     record_pass "1.10" "deployed versions match repo (filter=$deployed_filter_v writer=$deployed_writer_v)"
@@ -341,6 +348,19 @@ else
     record_fail "1.10" "version mismatch (deployed: filter=${deployed_filter_v:-?} writer=${deployed_writer_v:-?}; expected: filter=$EXPECTED_FILTER_VERSION writer=$EXPECTED_WRITER_VERSION)" \
         "re-run install-runtime.sh as root, or reinstall the plugin" \
         "#status-tab-filter--writer-version-mismatch"
+fi
+
+# 1.11 /boot/config/plugins/claude-ssh/ enterable by constrained user so the
+# filter can read allowlist.cfg. Functional check: as the constrained user,
+# `cat allowlist.cfg` should succeed and contain at least one valid entry.
+# (The pre-flight only verified perms-as-root; this confirms perms-as-claude.)
+allowlist_view=$(ssh_claude "cat /boot/config/plugins/claude-ssh/allowlist.cfg" 2>&1 || true)
+if printf '%s' "$allowlist_view" | grep -qE '^(plugin|container) verify-test$'; then
+    record_pass "1.11" "constrained user can read allowlist.cfg (perms allow filter to see entries)"
+else
+    record_fail "1.11" "constrained user cannot read allowlist.cfg — filter will default-deny all writes" \
+        "chmod 755 /boot/config/plugins/claude-ssh/ (or re-run install-runtime.sh on plugin 2026.05.12b+)" \
+        "#writer-rejection-name-not-in-allowlist"
 fi
 
 # ===========================================================================
@@ -463,9 +483,11 @@ write_ok_case() {
     fi
 }
 
-# Helper: must-reject case.  $1=id  $2=name  $3=full claude-write argv  $4=expected reject substring (optional)
+# Helper: must-reject case.  $1=id  $2=name  $3=full claude-write argv  $4=expected reject pattern (optional)
+# Rejections can come from the filter ("BLOCKED:...") OR the writer ("REJECTED:...");
+# both are valid structured rejection signals.
 write_reject_case() {
-    local id="$1" name="$2" argv="$3" expect="${4:-REJECTED}"
+    local id="$1" name="$2" argv="$3" expect="${4:-BLOCKED|REJECTED}"
     local out rc
     out=$(echo "verify-suite $TS" | ssh_claude "claude-write $argv" 2>&1)
     rc=$?
@@ -473,11 +495,11 @@ write_reject_case() {
         record_fail "$id" "$name unexpectedly succeeded" "$writer_hint_accept" "$writer_doc_accept"
         return
     fi
-    if printf '%s' "$out" | grep -qi "$expect"; then
-        record_pass "$id" "$name (rejected as expected)"
+    if printf '%s' "$out" | grep -qE "$expect"; then
+        record_pass "$id" "$name (rejected: $(printf '%s' "$out" | head -1))"
     else
         record_fail "$id" "$name rejected but message unexpected (got: $out)" \
-            "writer rejection messages may have changed; verify writer version" \
+            "filter/writer rejection messages may have changed; verify versions" \
             "$writer_doc_accept"
     fi
 }
@@ -592,10 +614,14 @@ else
         "#status-tab-filter--writer-version-mismatch"
 fi
 
-# 5.3 status endpoint reports same versions (soft-fail / skip if Unraid web server unreachable)
+# 5.3 status endpoint reports same versions. Unraid's exec.php usually
+# requires a web-UI session for auth, so a bare curl from a root shell often
+# gets a redirect or HTML login page instead of JSON. Skip when the response
+# doesn't look like the expected JSON shape — the Settings tab in a real
+# browser is the canonical check.
 status_json=$(ssh_root "curl -s -m 5 'http://localhost/plugins/claude-ssh/include/exec.php?action=status' 2>/dev/null" || true)
-if [ -z "$status_json" ]; then
-    record_skip "5.3" "Settings/Status endpoint reports versions" "Unraid web server not reachable from localhost on the NAS"
+if [ -z "$status_json" ] || ! printf '%s' "$status_json" | grep -q '"filter_version"'; then
+    record_skip "5.3" "Settings/Status endpoint reports versions" "endpoint requires web-UI session auth (curl from root shell returned no JSON) — verify in a browser on the Settings tab"
 else
     api_filter_v=$(printf '%s' "$status_json" | grep -oE '"filter_version":"[^"]+"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
     api_writer_v=$(printf '%s' "$status_json" | grep -oE '"writer_version":"[^"]+"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')

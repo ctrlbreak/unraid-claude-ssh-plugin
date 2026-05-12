@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.12a">
+  <!ENTITY version   "2026.05.12b">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,18 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.12b
+- **Fix allowlist unreadable by constrained user.** install-runtime.sh now
+  explicitly `chmod 755 /boot/config/plugins/claude-ssh/` (idempotent —
+  fixes existing installs where the dir was created with mode 700 from
+  earlier root umask). Without world-execute on the dir, the SSH filter
+  silently default-denies every `claude-write plugin-*` and
+  `claude-write appdata-script` invocation because it can't stat
+  `allowlist.cfg`. Surfaced during first live deploy: every Layer-3 write
+  in `verify-install.sh` was rejected as "not in allowlist" despite the
+  entries being present.
+- No filter/writer version bump — runtime artifacts unchanged.
+
 ###2026.05.12a
 - **Fix .plg FILE block ordering.** The `&pkgURL;` download block now
   precedes the install script, so `upgradepkg` runs against the freshly-
