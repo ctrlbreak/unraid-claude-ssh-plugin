@@ -48,8 +48,14 @@ if [ "$NEED_ENV" -ne 0 ]; then
 Usage:
   ROOT_HOST=root@nas.local CLAUDE_HOST=claude@nas.local bash verify-install.sh
 
-ROOT_HOST    — passwordless root SSH (used for install-state checks).
-CLAUDE_HOST  — constrained-user SSH (exercises the actual filter end-to-end).
+Required env vars:
+  ROOT_HOST       — root SSH target (key auth or password).
+  CLAUDE_HOST     — constrained-user SSH target.
+
+Optional env vars (point ssh at specific keys instead of ~/.ssh/id_*):
+  ROOT_SSH_KEY    — path to private key for root login.
+  CLAUDE_SSH_KEY  — path to private key for the constrained user
+                    (typically the key you handed to the AI agent).
 
 See docs/verifying.md for the full prerequisites.
 EOF
@@ -60,6 +66,15 @@ fi
 
 ROOT_SSH_OPTS=(-o ControlMaster=auto -o ControlPath=/tmp/verify-ssh-%r@%h -o ControlPersist=60s -o ConnectTimeout=5)
 CLAUDE_SSH_OPTS=(-o ControlMaster=auto -o ControlPath=/tmp/verify-ssh-%r@%h -o ControlPersist=60s -o ConnectTimeout=5)
+
+if [ -n "${ROOT_SSH_KEY:-}" ]; then
+    [ -r "$ROOT_SSH_KEY" ] || { echo "ERROR: ROOT_SSH_KEY=$ROOT_SSH_KEY not readable" >&2; exit 1; }
+    ROOT_SSH_OPTS+=(-i "$ROOT_SSH_KEY")
+fi
+if [ -n "${CLAUDE_SSH_KEY:-}" ]; then
+    [ -r "$CLAUDE_SSH_KEY" ] || { echo "ERROR: CLAUDE_SSH_KEY=$CLAUDE_SSH_KEY not readable" >&2; exit 1; }
+    CLAUDE_SSH_OPTS+=(-i "$CLAUDE_SSH_KEY")
+fi
 
 ssh_root() {
     ssh "${ROOT_SSH_OPTS[@]}" "$ROOT_HOST" "$1"

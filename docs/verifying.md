@@ -64,6 +64,20 @@ What it does **not** verify:
 ROOT_HOST=root@nas.local CLAUDE_HOST=claude@nas.local bash verify-install.sh
 ```
 
+If `ssh` doesn't pick the right keys automatically, point it at them
+explicitly:
+
+```bash
+ROOT_HOST=root@nas.local CLAUDE_HOST=claude@nas.local \
+ROOT_SSH_KEY=~/.ssh/id_ed25519 \
+CLAUDE_SSH_KEY=~/.ssh/claude_unraid \
+bash verify-install.sh
+```
+
+Either env var is optional — omit it and `ssh` uses its default key
+search (or prompts for a password, which `ControlMaster` will then
+reuse for the rest of the run).
+
 Expected runtime: a few seconds. SSH ControlMaster is set up so the
 script reuses one connection per host instead of doing ~40 handshakes.
 
