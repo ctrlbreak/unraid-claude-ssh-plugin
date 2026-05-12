@@ -8,6 +8,31 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.12e — 2026-05-12
+
+- **Simplified install banners.** The SSH-setup script's "Setup
+  complete!" block dropped from ~30 lines to ~10. The 14-line filter-
+  rule summary (Allowlist / Blocked / Flags / xargs / Shell / Allowed /
+  Splitting / Forwarding) moved to `docs/filter.md` where it can stay
+  comprehensive without dominating every install dialog. The 6 test
+  examples shrunk to 2 (one allowed, one blocked) — enough to
+  communicate the shape of the filter; the rest live in the docs. The
+  claude-write banner dropped from ~42 lines to ~10 in the same
+  spirit: the 16-line categories table moved to `docs/categories.md`,
+  and the two workstation-usage examples merged into one.
+- **Dropped the obsolete "NEXT: redeploy unraid-readonly-ssh-setup.sh"
+  line** from the writer banner. It was a leftover from the
+  standalone-install workflow. Under the plugin, `install-runtime.sh`
+  calls both setup scripts in sequence — so the filter is already
+  redeployed by the time the user reads the writer banner. The hint
+  was at best redundant, at worst confusing.
+- **`install-runtime.sh` now prints a closing summary** with three
+  concrete next steps (add an SSH key, edit `allowlist.cfg`, check
+  Settings → Claude SSH) plus a pointer to `verify-install.sh` for
+  deeper end-to-end verification.
+- No filter/writer version bump — runtime artifacts (the heredoc'd
+  filter and writer) are byte-identical with `2026.05.12d`.
+
 ## 2026.05.12d — 2026-05-12
 
 - **Centralise filter/writer version literals.** Each setup script now

@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.12d">
+  <!ENTITY version   "2026.05.12e">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,22 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.12e
+- **Simplified install banners.** The SSH-setup script's "Setup complete!"
+  block dropped from ~30 lines to ~10 (14 lines of filter-rule detail moved
+  to docs/filter.md, test examples trimmed from 6 to 2). The claude-write
+  banner dropped from ~42 lines to ~10 (16 lines of category detail moved
+  to docs/categories.md, dual workstation-usage examples merged into one).
+- **Dropped the obsolete "NEXT: redeploy unraid-readonly-ssh-setup.sh" line**
+  from the writer banner. It was a leftover from the standalone-install
+  workflow; under the plugin, install-runtime.sh calls both setup scripts
+  in sequence, so the filter is already redeployed by the time the user
+  reads the writer banner.
+- **install-runtime.sh now prints a closing summary** with three concrete
+  next steps (add SSH key, edit allowlist, check Settings tab) and a
+  pointer to verify-install.sh for deeper end-to-end verification.
+- No filter/writer version bump — runtime artifacts unchanged.
+
 ###2026.05.12d
 - **Centralise filter/writer version literals.** Each setup script now
   declares its runtime-contract version as a single shell variable at the

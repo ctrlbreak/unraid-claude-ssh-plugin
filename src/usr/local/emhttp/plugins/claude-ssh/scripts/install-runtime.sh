@@ -247,3 +247,24 @@ if [ "$migrated" -eq 1 ]; then
 fi
 
 log "install-runtime.sh complete"
+
+# Closing summary for the human running this — installer logs scroll past,
+# so consolidate the few things they actually need to do next.
+echo ""
+echo "=========================================="
+echo "  claude-ssh plugin installed"
+echo "=========================================="
+echo "  Plugin: claude-ssh   Filter+writer: see Settings → Claude SSH"
+echo ""
+echo "  Next steps:"
+echo "    1. Add an SSH public key to /home/$USERNAME/.ssh/authorized_keys"
+echo "       (and restrict it via command=\"...shell-filter.sh\" if not done by the deploy script)"
+echo "    2. Edit /mnt/user/appdata/claude-ssh/allowlist.cfg to enable categories,"
+echo "       or use the Settings → Claude SSH allowlist card."
+echo "    3. Open Settings → Claude SSH — Health KPI should be green, with the"
+echo "       configured user, filter, and writer versions shown."
+echo ""
+echo "  Deeper end-to-end verification (from a checkout of the plugin repo):"
+echo "    ROOT_HOST=root@<nas> CLAUDE_HOST=$USERNAME@<nas> bash verify-install.sh"
+echo "    (https://github.com/ctrlbreak/unraid-claude-ssh-plugin)"
+echo ""
