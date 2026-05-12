@@ -1,7 +1,13 @@
 #!/bin/bash
 # Asserts that current-tense filter/writer version mentions in user-facing
-# docs match the canonical FILTER_VERSION / WRITER_VERSION declared in the
+# files match the canonical FILTER_VERSION / WRITER_VERSION declared in the
 # setup scripts.
+#
+# Scope: README.md, docs/*.md, and verify-install.sh (the sibling parser
+# that was missed in the 2026.05.12d centralisation pass — `11ab7e5` fixed
+# it, but the drift test now covers it so a future regression here would
+# fail CI). The setup scripts themselves are excluded — they ARE the
+# canonical source.
 #
 # Targeted, not exhaustive: catches drift in specific phrase shapes that are
 # unambiguously current-tense claims:
@@ -10,7 +16,7 @@
 #   - "**Writer version:** `vN`"  (same)
 #   - "← filter vN"               (threat-model.md diagram annotation)
 #   - "← writer vN"               (same)
-#   - "filter=vN"                 (verifying.md sample output)
+#   - "filter=vN"                 (verifying.md sample output, verify-install.sh)
 #   - "writer=vN"                 (same)
 #
 # Historical / example mentions in prose ("the v9 release added X", a
@@ -36,7 +42,7 @@ if [ -z "$FILTER_VER" ] || [ -z "$WRITER_VER" ]; then
 fi
 echo "  canonical: filter=$FILTER_VER writer=$WRITER_VER"
 
-DOCS=(
+SCAN_FILES=(
     "README.md"
     "docs/install.md"
     "docs/categories.md"
@@ -47,6 +53,7 @@ DOCS=(
     "docs/verifying.md"
     "docs/wire-protocol.md"
     "docs/releasing.md"
+    "verify-install.sh"
 )
 
 PASS=0
@@ -76,7 +83,7 @@ assert_phrase() {
     done <<< "$matches"
 }
 
-for f in "${DOCS[@]}"; do
+for f in "${SCAN_FILES[@]}"; do
     fp="$ROOT/$f"
     [ -r "$fp" ] || continue
 
