@@ -58,8 +58,8 @@ fi
 
 # ---- Pre-flight: SSH ControlMaster (single handshake per host) -------------
 
-ROOT_SSH_OPTS=(-o ControlMaster=auto -o ControlPath=/tmp/verify-ssh-%r@%h -o ControlPersist=30s -o BatchMode=yes -o ConnectTimeout=5)
-CLAUDE_SSH_OPTS=(-o ControlMaster=auto -o ControlPath=/tmp/verify-ssh-%r@%h -o ControlPersist=30s -o BatchMode=yes -o ConnectTimeout=5)
+ROOT_SSH_OPTS=(-o ControlMaster=auto -o ControlPath=/tmp/verify-ssh-%r@%h -o ControlPersist=60s -o ConnectTimeout=5)
+CLAUDE_SSH_OPTS=(-o ControlMaster=auto -o ControlPath=/tmp/verify-ssh-%r@%h -o ControlPersist=60s -o ConnectTimeout=5)
 
 ssh_root() {
     ssh "${ROOT_SSH_OPTS[@]}" "$ROOT_HOST" "$1"
@@ -71,12 +71,14 @@ ssh_claude() {
 
 echo "==> claude-ssh verification suite"
 echo "==> ROOT_HOST=$ROOT_HOST  CLAUDE_HOST=$CLAUDE_HOST"
+echo "==> Opening SSH master connections (password prompt may appear once)..."
 
 # ---- Pre-flight: SSH connectivity ------------------------------------------
 
-if ! ssh_root "true" >/dev/null 2>&1; then
+# stderr left attached so any password prompt is visible; ControlMaster opens
+# on the first call and subsequent ssh_root/ssh_claude calls reuse the socket.
+if ! ssh_root "true" >/dev/null; then
     echo "ERROR: cannot SSH to $ROOT_HOST as root" >&2
-    echo "       check passwordless key auth and BatchMode connectivity" >&2
     exit 1
 fi
 

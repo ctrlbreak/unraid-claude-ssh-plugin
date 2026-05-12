@@ -27,8 +27,11 @@ What it does **not** verify:
 
 ## Prerequisites
 
-1. **Passwordless root SSH** to the NAS. Same shape as `deploy.sh` —
-   typically a key in `~/.ssh/authorized_keys` for `root@<nas>`.
+1. **Root SSH** to the NAS — key auth (passwordless) or password auth both
+   work. Same shape as `deploy.sh`. The suite opens an SSH master connection
+   on the first call (you'll be prompted for the password once if you use
+   password auth) and reuses it via `ControlMaster` for every subsequent
+   call, so you only enter the password once per run.
 
 2. **Constrained-user SSH** to the NAS, using the SSH key you'd hand to
    an AI agent. The default user is `claude`; if you've changed it via
