@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.07a">
+  <!ENTITY version   "2026.05.12a">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,21 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.12a
+- **Fix .plg FILE block ordering.** The `&pkgURL;` download block now
+  precedes the install script, so `upgradepkg` runs against the freshly-
+  downloaded `.txz` instead of whatever was cached on flash. Previously
+  the install script ran first and used a stale (or missing) cached
+  `.txz`, causing silent regressions on upgrades and outright install
+  failures for fresh adopters.
+- **Filter version banner fixed.** `unraid-readonly-ssh-setup.sh`'s
+  install-time output line said "Filter: ... v7" — a stale label not
+  bumped when filter went v7 → v8 → v9. Now reads v9. Runtime artifact
+  unchanged (the deployed filter has always carried the correct
+  `# Filter version:` marker; this was install-stdout cosmetic only).
+- No runtime behaviour changes from `2026.05.07a` — filter `v9`, writer
+  `v4` unchanged.
+
 ###2026.05.07a
 - First public release. Repo published at
   https://github.com/ctrlbreak/unraid-claude-ssh-plugin and the plugin is
@@ -94,9 +109,25 @@
 </CHANGES>
 
 <!--
-Install / upgrade script. The .txz extracts the plugin tree to
-/usr/local/emhttp/plugins/claude-ssh/, then install-runtime.sh runs the
-filter + writer setup scripts and registers the boot hook.
+Package file. Downloaded from the GitHub release matching this .plg's
+version entity. CI substitutes the real md5 into &md5; on tag push; the
+in-repo .plg has __MD5__ as a placeholder and is not directly installable
+— always install from a release URL (see docs/install.md).
+
+MUST come before the install script below: Unraid processes FILE blocks
+in document order, so the .txz needs to land on flash before
+upgradepkg runs.
+-->
+<FILE Name="&pkgURL;">
+<URL>&pkgRemote;</URL>
+<MD5>&md5;</MD5>
+</FILE>
+
+<!--
+Install / upgrade script. The .txz (downloaded by the FILE block above)
+extracts the plugin tree to /usr/local/emhttp/plugins/claude-ssh/, then
+install-runtime.sh runs the filter + writer setup scripts and registers
+the boot hook.
 -->
 <FILE Run="/bin/bash">
 <INLINE>
@@ -146,17 +177,6 @@ removepkg "${PLUGIN}"
 echo "${PLUGIN} removed. Config preserved at /boot/config/plugins/${PLUGIN}/"
 echo "To fully purge: userdel claude &amp;&amp; rm -rf /home/claude /mnt/cache/appdata/claude-write-backups"
 </INLINE>
-</FILE>
-
-<!--
-Package file. Downloaded from the GitHub release matching this .plg's
-version entity. CI substitutes the real md5 into &md5; on tag push; the
-in-repo .plg has __MD5__ as a placeholder and is not directly installable
-— always install from a release URL (see docs/install.md).
--->
-<FILE Name="&pkgURL;">
-<URL>&pkgRemote;</URL>
-<MD5>&md5;</MD5>
 </FILE>
 
 </PLUGIN>

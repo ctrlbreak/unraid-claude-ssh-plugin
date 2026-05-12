@@ -8,6 +8,22 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.12a — 2026-05-12
+
+- **Fix `.plg` FILE block ordering.** The `&pkgURL;` download block now
+  precedes the install script, so `upgradepkg` runs against the
+  freshly-downloaded `.txz` instead of whatever was cached on flash.
+  Previously the install script ran first and used a stale (or missing)
+  cached `.txz`, causing silent regressions on upgrades and outright
+  install failures for fresh adopters.
+- **Filter version banner fixed.** `unraid-readonly-ssh-setup.sh`'s
+  install-time output line said "Filter: ... v7" — a stale label not
+  bumped when filter went v7 → v8 → v9. Now reads v9. Runtime artifact
+  unchanged (the deployed filter has always carried the correct
+  `# Filter version:` marker; this was install-stdout cosmetic only).
+- No runtime behaviour changes from `2026.05.07a` — filter `v9`, writer
+  `v4` unchanged.
+
 ## 2026.05.07a — 2026-05-07
 
 - **First public release.** Repo published at

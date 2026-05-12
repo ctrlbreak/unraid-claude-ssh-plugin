@@ -43,7 +43,7 @@ Active phase plan and per-phase progress live in **project memory** (NOT this fi
 - Same dir, `handoff_*.md` — per-phase handoffs with edge cases and resume prompts
 - `~/.claude/plans/i-m-considering-whether-i-nifty-tiger.md` — full design memo (architecture + coupling-point inventory + classification rationale)
 
-**Current state (as of 2026-05-07, last commit `0a3976e`):** All 9 planned phases done. First public release `v2026.05.07a` published at https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases. Plugin `2026.05.07a`, filter v9, writer v4. 15 tests green · 1 skipped locally (shellcheck not installed); CI runs the full 16 (shellcheck included). NOT yet deployed live to any NAS — first live install will exercise filter/writer/Settings UI against real Unraid theme variables.
+**Current state (as of 2026-05-12):** All 9 planned phases done + `verify-install.sh` end-to-end smoke test shipped. Releases: `v2026.05.07a` (first public), `v2026.05.12a` (fix .plg FILE block ordering + stale filter v7 banner). Plugin `2026.05.12a`, filter v9, writer v4. 15 tests green · 1 skipped locally (shellcheck not installed); CI runs the full 16 (shellcheck included). FIRST LIVE DEPLOY in progress: NAS upgraded from old homelab-scripts v7 plugin to v9 on 2026-05-12; install initially regressed silently because of the .plg ordering bug (fixed in `2026.05.12a`), recovered via `plugin install ... forced`.
 
 ## Working style — keep doing these
 
