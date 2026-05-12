@@ -26,7 +26,9 @@ SCRIPTS=(
 #   SC1091 - source path not following (we don't always source)
 #   SC2029 - variable expands client-side in `ssh host "cmd $var"` — fine when
 #            we control the variable (deploy.sh's $PLG is a fixed constant)
-EXCLUDE="SC2155,SC2002,SC1091,SC2029"
+#   SC2317 - "command appears unreachable" — fires on trap-invoked functions
+#            (verify-install.sh's cleanup()) which shellcheck can't see called.
+EXCLUDE="SC2155,SC2002,SC1091,SC2029,SC2317"
 FAIL=0
 
 for s in "${SCRIPTS[@]}"; do
