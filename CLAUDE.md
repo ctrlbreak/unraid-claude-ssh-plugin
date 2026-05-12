@@ -43,7 +43,7 @@ Active phase plan and per-phase progress live in **project memory** (NOT this fi
 - Same dir, `handoff_*.md` — per-phase handoffs with edge cases and resume prompts
 - `~/.claude/plans/i-m-considering-whether-i-nifty-tiger.md` — full design memo (architecture + coupling-point inventory + classification rationale)
 
-**Current state (as of 2026-05-12):** All 9 planned phases done + `verify-install.sh` end-to-end smoke test shipped. Releases: `v2026.05.07a` (first public), `v2026.05.12a` (fix .plg FILE block ordering + stale filter v7 banner), `v2026.05.12b` (fix CFG_DIR mode 700 → 755 so constrained user can read allowlist.cfg). Plugin `2026.05.12b`, filter v9, writer v4. 16 tests green locally. First live deploy: NAS upgraded from old homelab-scripts v7 plugin to v9 on 2026-05-12; surfaced two install-time bugs (`.plg` ordering, CFG_DIR perms) both now fixed.
+**Current state (as of 2026-05-12):** All 9 planned phases done + `verify-install.sh` end-to-end smoke test shipped. Releases: `v2026.05.07a` (first public), `v2026.05.12a` (fix .plg FILE block ordering + stale filter v7 banner), `v2026.05.12b` (attempted CFG_DIR chmod 755 — silent no-op because /boot is FAT-mounted with dmask=0077), `v2026.05.12c` (move allowlist to /mnt/user/appdata/claude-ssh/ — the real fix; bumps filter v9 → v10, writer v4 → v5). Plugin `2026.05.12c`, filter v10, writer v5. 16 tests green locally. First live deploy in progress: NAS upgraded from old homelab-scripts v7 plugin; surfaced three install-time bugs (`.plg` ordering, FAT-mask perms, allowlist location) all now fixed.
 
 ## Working style — keep doing these
 
@@ -138,11 +138,11 @@ Use the `phase 5` and `phase 6` handoffs as canonical templates.
 
 Each of these is enforced by at least one test. If a test fails because of one, fix the code, not the test (unless the user explicitly agreed to weaken the invariant).
 
-1. **Filter / writer / exec.php parser lockstep.** Same allowlist path default (`/boot/config/plugins/claude-ssh/allowlist.cfg`), same `CLAUDE_SSH_ALLOWLIST_FILE` env override, same awk shape (`awk -v k="$kind" 'NF == 2 && $1 == k { print $2 }'`), same name regex (`^[a-z][a-z0-9-]{0,63}$`). Enforced by `test-claude-write-validation.sh`.
+1. **Filter / writer / exec.php parser lockstep.** Same allowlist path default (`/mnt/user/appdata/claude-ssh/allowlist.cfg` — on the array because `/boot` is FAT and the kernel forces dirs to 700 there, blocking the constrained user from reading), same `CLAUDE_SSH_ALLOWLIST_FILE` env override, same awk shape (`awk -v k="$kind" 'NF == 2 && $1 == k { print $2 }'`), same name regex (`^[a-z][a-z0-9-]{0,63}$`). Enforced by `test-claude-write-validation.sh`.
 
 2. **`cs_resolve_username()` body byte-identical** across `unraid-readonly-ssh-setup.sh`, `claude-write-setup.sh`, `install-runtime.sh`, `uninstall-runtime.sh`. Enforced by `test-username-configurable.sh` drift check.
 
-3. **`/boot/config/plugins/claude-ssh/{allowlist.cfg,username}` are NEVER overwritten** on plugin upgrade. They're seeded on first install (when the file is missing) and respected forever after. User-edited content survives upgrades.
+3. **User-edited config files are NEVER overwritten** on plugin upgrade. The two files: `/mnt/user/appdata/claude-ssh/allowlist.cfg` (the plugin/container allowlist — on the array since v10/2026.05.12c because /boot is FAT and kernel-forces dir mode 700) and `/boot/config/plugins/claude-ssh/username` (the configured SSH username — stays on /boot because only root reads it). Both are seeded on first install (when the file is missing) and respected forever after. Plugin `2026.05.12c` install-runtime.sh does a one-shot migration of any existing legacy `/boot/config/plugins/claude-ssh/allowlist.cfg` to the new array location.
 
 4. **Sudoers heredoc must be unquoted** (`<< SUDO`, not `<< 'SUDO'`) so `$USERNAME` interpolates into the principal. Quoted form would leave the literal string `$USERNAME` in the file, which visudo would reject. Enforced by `test-username-configurable.sh` case #6.
 

@@ -22,7 +22,7 @@
 #         plugin verify-test
 #         container verify-test
 #     Add via the Settings UI's Allowlist card or by editing
-#     /boot/config/plugins/claude-ssh/allowlist.cfg. The pre-flight will
+#     /mnt/user/appdata/claude-ssh/allowlist.cfg. The pre-flight will
 #     fail-fast with exact instructions if either entry is missing.
 #
 # Exits 0 if every case passes (skipped does not fail). Exits 1 on any failure.
@@ -130,7 +130,7 @@ echo "==> Expected versions: filter=$EXPECTED_FILTER_VERSION writer=$EXPECTED_WR
 USERNAME=$(ssh_root "cat /boot/config/plugins/claude-ssh/username 2>/dev/null || echo claude" | tr -d '[:space:]')
 if [ -z "$USERNAME" ]; then USERNAME="claude"; fi
 
-ALLOWLIST_REMOTE="/boot/config/plugins/claude-ssh/allowlist.cfg"
+ALLOWLIST_REMOTE="/mnt/user/appdata/claude-ssh/allowlist.cfg"
 ALLOWLIST_CONTENT=$(ssh_root "cat $ALLOWLIST_REMOTE 2>/dev/null" || true)
 
 has_plugin_verify=$(printf '%s\n' "$ALLOWLIST_CONTENT" | awk 'NF == 2 && $1 == "plugin" && $2 == "verify-test"' | head -1)
@@ -354,12 +354,12 @@ fi
 # filter can read allowlist.cfg. Functional check: as the constrained user,
 # `cat allowlist.cfg` should succeed and contain at least one valid entry.
 # (The pre-flight only verified perms-as-root; this confirms perms-as-claude.)
-allowlist_view=$(ssh_claude "cat /boot/config/plugins/claude-ssh/allowlist.cfg" 2>&1 || true)
+allowlist_view=$(ssh_claude "cat /mnt/user/appdata/claude-ssh/allowlist.cfg" 2>&1 || true)
 if printf '%s' "$allowlist_view" | grep -qE '^(plugin|container) verify-test$'; then
     record_pass "1.11" "constrained user can read allowlist.cfg (perms allow filter to see entries)"
 else
     record_fail "1.11" "constrained user cannot read allowlist.cfg — filter will default-deny all writes" \
-        "chmod 755 /boot/config/plugins/claude-ssh/ (or re-run install-runtime.sh on plugin 2026.05.12b+)" \
+        "upgrade to plugin 2026.05.12c+ (moves allowlist off /boot's FAT mount), or re-run install-runtime.sh as root" \
         "#writer-rejection-name-not-in-allowlist"
 fi
 

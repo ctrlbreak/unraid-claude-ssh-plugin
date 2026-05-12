@@ -29,7 +29,7 @@ flat — adding a new category is a deliberate decision, not a config knob.
 - Must match `^[a-z][a-z0-9-]{0,63}$` (lowercase letter then lowercase / digit /
   hyphen, 1-64 chars).
 - Must appear as a `plugin <name>` or `container <name>` line in
-  `/boot/config/plugins/claude-ssh/allowlist.cfg`. Default-deny: missing or
+  `/mnt/user/appdata/claude-ssh/allowlist.cfg`. Default-deny: missing or
   empty allowlist rejects every 3-arg write.
 
 **Stdin** (content for the file being written):
@@ -64,7 +64,7 @@ NAS as a one-off.
 ### `plugin-page` — Unraid web UI tab
 
 ```bash
-allowlist=/boot/config/plugins/claude-ssh/allowlist.cfg
+allowlist=/mnt/user/appdata/claude-ssh/allowlist.cfg
 echo "plugin torrent-handler" | ssh root@nas "tee -a ${allowlist}"
 
 cat my-tab.page | ssh claude@nas \
@@ -86,7 +86,7 @@ cat my-cron.sh | ssh claude@nas \
 
 ```bash
 echo "container sonarr" | ssh root@nas \
-  'tee -a /boot/config/plugins/claude-ssh/allowlist.cfg'
+  'tee -a /mnt/user/appdata/claude-ssh/allowlist.cfg'
 
 cat my-hook.sh | ssh claude@nas \
   'claude-write appdata-script sonarr post-import.sh'

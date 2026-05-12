@@ -8,6 +8,29 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.12c — 2026-05-12
+
+- **Move allowlist off `/boot/config`.** Filter `v9 → v10`, writer
+  `v4 → v5`. The constrained SSH user could never read the allowlist
+  when it lived in `/boot/config/plugins/claude-ssh/` because `/boot`
+  is FAT-mounted with `dmask=0077` — the kernel forces every directory
+  on that mount to mode 700 regardless of chmod. New canonical
+  location: `/mnt/user/appdata/claude-ssh/allowlist.cfg`, on the array
+  with normal Unix perms (mode 644). The previous attempted fix in
+  `2026.05.12b` (`chmod 755` on the dir) was a silent no-op because
+  the FAT mask overrides chmod.
+- **One-shot migration on upgrade.** `install-runtime.sh` copies any
+  existing `/boot/config/plugins/claude-ssh/allowlist.cfg` to the new
+  location and renames the legacy file to
+  `*.migrated-pre-v2026.05.12c` so it's clearly out of service.
+  Settings UI saves go to the new path atomically.
+- **Username file stays put** at
+  `/boot/config/plugins/claude-ssh/username`. Only read by root
+  (install-runtime.sh, claude-write-setup.sh, exec.php) — the FAT mask
+  doesn't affect that path's usability.
+- Banner version labels in setup scripts caught up (`v7 → v10`,
+  `v2 → v5`) — were stale from earlier filter/writer version bumps.
+
 ## 2026.05.12b — 2026-05-12
 
 - **Fix allowlist unreadable by constrained user.** `install-runtime.sh`

@@ -87,9 +87,11 @@ else
 fi
 
 # 3. Plugin-name allowlist sourced from runtime config — filter and writer
-# must read the SAME path with the SAME default. Both use:
-#   "${CLAUDE_SSH_ALLOWLIST_FILE:-/boot/config/plugins/claude-ssh/allowlist.cfg}"
-EXPECTED_PATH_FRAG='${CLAUDE_SSH_ALLOWLIST_FILE:-/boot/config/plugins/claude-ssh/allowlist.cfg}'
+# must read the SAME path with the SAME default. v10+ default lives on the
+# array (mode 644 readable by the constrained SSH user); /boot was FAT and
+# kernel-forced mode 700, so the filter couldn't read the allowlist there.
+#   "${CLAUDE_SSH_ALLOWLIST_FILE:-/mnt/user/appdata/claude-ssh/allowlist.cfg}"
+EXPECTED_PATH_FRAG='${CLAUDE_SSH_ALLOWLIST_FILE:-/mnt/user/appdata/claude-ssh/allowlist.cfg}'
 if ! grep -qF "$EXPECTED_PATH_FRAG" "$SETUP_FILTER"; then
     echo "  FAIL: filter does not reference allowlist path with expected default"
     FAIL=1
@@ -127,7 +129,7 @@ if [ ! -f "$EXEC_PHP" ]; then
     echo "  FAIL: $EXEC_PHP missing"
     FAIL=1
 else
-    if ! grep -qF "/boot/config/plugins/claude-ssh/allowlist.cfg" "$EXEC_PHP"; then
+    if ! grep -qF "/mnt/user/appdata/claude-ssh/allowlist.cfg" "$EXEC_PHP"; then
         echo "  FAIL: exec.php missing default allowlist path"
         FAIL=1
     fi

@@ -62,12 +62,11 @@ USERNAME_FILE="$USERNAME_DIR/username"
 if [ ! -d "$USERNAME_DIR" ]; then
     mkdir -p "$USERNAME_DIR"
 fi
-# The constrained SSH user reads allowlist.cfg from this dir on every filter
-# invocation. Without world-execute on the dir, the filter silently
-# default-denies all plugin/container writes (can't enter dir → can't stat
-# the file). Idempotent: fixes existing installs where the dir was created
-# with a stricter umask (mode 700 from `mkdir` under root's tightened umask).
-chmod 755 "$USERNAME_DIR"
+# The username file is only read by root (cs_resolve_username in this script,
+# claude-write-setup.sh, and exec.php) — never by the constrained SSH user —
+# so /boot's FAT-forced mode-700 directory is fine here. (The allowlist used
+# to live in this same dir; v10 moved it to /mnt/user/appdata/claude-ssh/
+# specifically because the filter needs to read it as the constrained user.)
 if [ ! -f "$USERNAME_FILE" ]; then
     printf '%s\n' "$USERNAME" > "$USERNAME_FILE"
     chmod 644 "$USERNAME_FILE"
@@ -90,24 +89,54 @@ fi
 log "running claude-write-setup.sh"
 bash "${SCRIPTS_DIR}/claude-write-setup.sh"
 
-# --- 2.5. Bootstrap allowlist.cfg (runtime config for plugin-name allowlist) ---
-# Default-deny is the design: no plugin-* writes succeed until the user adds
-# an entry. We seed a commented template on first install so the file exists
-# and shows the format. Existing files are NEVER overwritten — preserves any
-# entries the user has populated via Settings UI or by editing directly.
-ALLOWLIST_DIR="/boot/config/plugins/claude-ssh"
+# --- 2.5. Bootstrap allowlist.cfg (runtime config for plugin/container allowlist) ---
+# Lives on the array (mode 644 readable by the constrained SSH user) rather
+# than /boot/config — /boot is FAT32 with dmask=0077 (every dir there is
+# kernel-forced mode 700) so the constrained user could never read the
+# allowlist from there. The array path stays readable to the filter at
+# runtime. Pre-v10 installs had the file at /boot/config/plugins/claude-ssh/
+# allowlist.cfg; migrate any existing content on upgrade and leave a
+# .migrated-pre-v2026.05.12c marker so the legacy file can be cleaned up
+# manually if desired. Default-deny is the design — no plugin/container
+# writes succeed until the user adds an entry.
+ALLOWLIST_DIR="/mnt/user/appdata/claude-ssh"
 ALLOWLIST_FILE="${ALLOWLIST_DIR}/allowlist.cfg"
-if [ ! -d "$ALLOWLIST_DIR" ]; then
-    mkdir -p "$ALLOWLIST_DIR"
-    log "created ${ALLOWLIST_DIR}"
-fi
-if [ ! -f "$ALLOWLIST_FILE" ]; then
-    cat > "$ALLOWLIST_FILE" << 'ALLOWLIST'
+LEGACY_ALLOWLIST_FILE="/boot/config/plugins/claude-ssh/allowlist.cfg"
+
+if [ ! -d /mnt/user/appdata ]; then
+    log "WARN: /mnt/user/appdata not available (array not started?) — allowlist setup deferred"
+    log "      re-run install-runtime.sh after the array is up to seed the allowlist"
+else
+    if [ ! -d "$ALLOWLIST_DIR" ]; then
+        mkdir -p "$ALLOWLIST_DIR"
+        chmod 755 "$ALLOWLIST_DIR"
+        log "created ${ALLOWLIST_DIR}"
+    fi
+    if [ ! -f "$ALLOWLIST_FILE" ] && [ -f "$LEGACY_ALLOWLIST_FILE" ]; then
+        # One-shot migration from /boot/config (v9 and earlier).
+        cp "$LEGACY_ALLOWLIST_FILE" "$ALLOWLIST_FILE"
+        chmod 644 "$ALLOWLIST_FILE"
+        mv "$LEGACY_ALLOWLIST_FILE" "${LEGACY_ALLOWLIST_FILE}.migrated-pre-v2026.05.12c"
+        log "migrated ${LEGACY_ALLOWLIST_FILE} -> ${ALLOWLIST_FILE}"
+        log "  (legacy file renamed to .migrated-pre-v2026.05.12c — safe to delete after verifying)"
+    elif [ ! -f "$ALLOWLIST_FILE" ]; then
+        cat > "$ALLOWLIST_FILE" << 'ALLOWLIST'
 # claude-ssh allowlist — runtime config for the claude-write deploy channel.
 #
-# Controls which plugins and containers the SSH user is allowed to write
-# into. Both the SSH filter and the privileged writer read this file
-# on every invocation; default-deny when empty or malformed.
+# CANONICAL LOCATION: /mnt/user/appdata/claude-ssh/allowlist.cfg
+#
+# This file must live here (on the array, not in /boot/config) because /boot
+# is FAT32 with mount option dmask=0077, which kernel-forces every directory
+# on /boot to mode 700 regardless of chmod. The constrained SSH user could
+# not read the allowlist from /boot. The array path stays mode 644 (normal
+# Unix filesystem), which is what the filter and writer need on every
+# invocation.
+#
+# Edit this file directly as root, or use the Settings UI's Allowlist card
+# (which writes here atomically and validates name format server-side).
+#
+# Both the SSH filter and the privileged writer read this file on every
+# invocation; default-deny when empty or malformed.
 #
 # Format:
 #   plugin <name>      Allow claude-write plugin-page/plugin-include/
@@ -125,8 +154,9 @@ if [ ! -f "$ALLOWLIST_FILE" ]; then
 # container sonarr
 # container radarr
 ALLOWLIST
-    chmod 644 "$ALLOWLIST_FILE"
-    log "seeded ${ALLOWLIST_FILE} (default-deny — uncomment entries to enable)"
+        chmod 644 "$ALLOWLIST_FILE"
+        log "seeded ${ALLOWLIST_FILE} (default-deny — uncomment entries to enable)"
+    fi
 fi
 
 # --- 3. Boot hook in /boot/config/go ---

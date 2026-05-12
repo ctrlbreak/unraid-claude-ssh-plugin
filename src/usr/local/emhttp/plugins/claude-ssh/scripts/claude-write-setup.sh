@@ -2,7 +2,7 @@
 # =============================================================================
 # Unraid: Install the `claude-write` deploy channel
 # =============================================================================
-# Writer version: v4
+# Writer version: v5
 # Lets the read-only `claude` SSH user write specific files (hooks, plugin
 # assets) to a small set of pre-approved locations on the NAS.
 #
@@ -139,7 +139,7 @@ reject() {
 # accepted. Default-deny on missing/empty/all-invalid file.
 # CLAUDE_SSH_ALLOWLIST_FILE env override is test-only; in production, sudo's
 # env_reset strips this var before the writer runs.
-ALLOWLIST_FILE="${CLAUDE_SSH_ALLOWLIST_FILE:-/boot/config/plugins/claude-ssh/allowlist.cfg}"
+ALLOWLIST_FILE="${CLAUDE_SSH_ALLOWLIST_FILE:-/mnt/user/appdata/claude-ssh/allowlist.cfg}"
 
 load_allowlist() {
     local kind="$1"
@@ -449,14 +449,14 @@ echo "  Simple — claude-write <cat> <basename>:"
 echo "    scratch         -> /tmp/claude-scratch/               (.sh .py .txt .json .log .conf .md)"
 echo ""
 echo "  Plugin — claude-write <cat> <plugin-name> <basename>"
-echo "    (allowlist: 'plugin <name>' lines in /boot/config/plugins/claude-ssh/allowlist.cfg)"
+echo "    (allowlist: 'plugin <name>' lines in /mnt/user/appdata/claude-ssh/allowlist.cfg)"
 echo "    plugin-script   -> /usr/local/emhttp/plugins/<plugin>/scripts/  (.py .sh, 755)"
 echo "    plugin-page     -> /usr/local/emhttp/plugins/<plugin>/          (.page, 644)"
 echo "    plugin-include  -> /usr/local/emhttp/plugins/<plugin>/include/  (.php .sh)"
 echo "    plugin-cfg      -> /usr/local/emhttp/plugins/<plugin>/          (.cfg, 644)"
 echo ""
 echo "  Container — claude-write <cat> <container> <basename>"
-echo "    (allowlist: 'container <name>' lines in /boot/config/plugins/claude-ssh/allowlist.cfg)"
+echo "    (allowlist: 'container <name>' lines in /mnt/user/appdata/claude-ssh/allowlist.cfg)"
 echo "    appdata-script  -> /mnt/user/appdata/<container>/scripts/       (.sh, 755)"
 echo ""
 echo "Both allowlists default-deny when empty. Edit allowlist.cfg to enable."
@@ -473,4 +473,4 @@ echo ""
 echo "Audit log:"
 echo "  grep claude-write /var/log/syslog"
 echo ""
-echo "NEXT: redeploy unraid-readonly-ssh-setup.sh (filter v9 matches writer v4)"
+echo "NEXT: redeploy unraid-readonly-ssh-setup.sh (filter v10 matches writer v5)"

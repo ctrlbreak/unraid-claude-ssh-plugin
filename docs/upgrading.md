@@ -26,7 +26,7 @@ These files survive every upgrade:
 | Path | What it is |
 |---|---|
 | `/boot/config/plugins/claude-ssh/username` | Configured SSH username (single line) |
-| `/boot/config/plugins/claude-ssh/allowlist.cfg` | Plugin + container allowlist with all your entries |
+| `/mnt/user/appdata/claude-ssh/allowlist.cfg` | Plugin + container allowlist with all your entries |
 | `/home/<user>/` | The SSH user's home, including `.ssh/authorized_keys` and key fingerprint trust |
 | `/mnt/cache/appdata/claude-write-backups/` | Rotated backups of every write that overwrote a prior file |
 | `/var/log/syslog` (subject to Unraid's rotation) | Audit trail |
@@ -34,6 +34,24 @@ These files survive every upgrade:
 Both invariants are tested:
 [`test-upgrade-path.sh`](../tests/test-upgrade-path.sh) asserts the seed-and-
 preserve behaviour for `username` and `allowlist.cfg`.
+
+### One-shot migration on upgrade to plugin `2026.05.12c` (filter v10)
+
+Plugin versions `<= 2026.05.12b` kept the allowlist at
+`/boot/config/plugins/claude-ssh/allowlist.cfg`. That was unreadable to the
+constrained SSH user because `/boot` is FAT-mounted with `dmask=0077`
+(kernel-forced mode 700 on every directory there, regardless of chmod),
+which silently default-denied every plugin / container write through the
+filter. Plugin `2026.05.12c` moves the allowlist to
+`/mnt/user/appdata/claude-ssh/allowlist.cfg` (array, mode 644, readable by
+the filter).
+
+On first upgrade to `2026.05.12c`, `install-runtime.sh` copies any existing
+content from the legacy path to the new path and renames the legacy file
+to `allowlist.cfg.migrated-pre-v2026.05.12c` so it's clearly out of
+service. Once you've verified the new install (`bash verify-install.sh`,
+or just confirm a known plugin/container write works), the
+`.migrated-pre-v2026.05.12c` file is safe to delete.
 
 ## What's regenerated on every upgrade
 

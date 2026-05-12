@@ -43,15 +43,15 @@ hooks are managed by the plugin so there's a single source of truth.
 
 ## Versions
 
-- **Plugin:** `2026.05.06c` (date-based, single source in `claude-ssh.plg`)
-- **Filter:** `v9` — parsed from a `# Filter version:` comment in the setup script
-- **Writer:** `v4` — parsed from a `# Writer version:` comment in the setup script
+- **Plugin:** `2026.05.12c` (date-based, single source in `claude-ssh.plg`)
+- **Filter:** `v10` — parsed from a `# Filter version:` comment in the setup script
+- **Writer:** `v5` — parsed from a `# Writer version:` comment in the setup script
 
 Bumping plugin version: edit one entity in `claude-ssh.plg`. Bumping filter or
 writer version: edit the comment + the relevant logic, then bump plugin version
 too. The Status page surfaces all three.
 
-## Categories (v9)
+## Categories
 
 ### Simple
 
@@ -67,7 +67,7 @@ claude-write plugin-script  <plugin-name> <basename>   → /usr/local/emhttp/plu
 claude-write plugin-cfg     <plugin-name> <basename>   → /usr/local/emhttp/plugins/<plugin>/
 ```
 
-### Container (3-arg, gated by container allowlist) — v9
+### Container (3-arg, gated by container allowlist)
 
 ```
 claude-write appdata-script <container> <basename>     → /mnt/user/appdata/<container>/scripts/
@@ -83,7 +83,7 @@ hooks under `/mnt/user/appdata/<container>/scripts/`.
 Both 3-arg category families are gated by entries in:
 
 ```
-/boot/config/plugins/claude-ssh/allowlist.cfg
+/mnt/user/appdata/claude-ssh/allowlist.cfg
 ```
 
 Format:
@@ -121,7 +121,7 @@ directory).
 
 Saving from the UI regenerates the file with a fixed header comment block —
 custom comments and unrelated lines are **not preserved**. Edit
-`/boot/config/plugins/claude-ssh/allowlist.cfg` directly if you need to
+`/mnt/user/appdata/claude-ssh/allowlist.cfg` directly if you need to
 keep them. The header advertises the format and name regex so even a
 hand-edited file is self-documenting.
 
@@ -182,7 +182,7 @@ ssh claude@nas 'claude-write appdata-script radarr foo.sh' < foo.sh
 ```
 
 Add `container sonarr` / `container radarr` (or whichever you need) to
-`/boot/config/plugins/claude-ssh/allowlist.cfg`.
+`/mnt/user/appdata/claude-ssh/allowlist.cfg`.
 
 ## Documentation
 
@@ -291,7 +291,7 @@ CLAUDE.md                   # Agent working rules + active invariants
 src/usr/local/emhttp/plugins/claude-ssh/
 ├── ClaudeSsh.page                  # Settings tab (Health + Allowlist editor + Status + Audit Log)
 ├── ClaudeSshDashboard.page         # Dashboard tile
-├── default.cfg                     # Defaults (allowlist lives in /boot/config/plugins/claude-ssh/allowlist.cfg)
+├── default.cfg                     # Defaults (allowlist lives in /mnt/user/appdata/claude-ssh/allowlist.cfg)
 ├── include/exec.php                # AJAX backend (status, audit_log, recent_writes, load/save_allowlist)
 └── scripts/
     ├── install-runtime.sh              # Calls setup scripts + manages /boot/config/go

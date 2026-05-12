@@ -2,7 +2,7 @@
 # =============================================================================
 # Unraid: Create a read-only SSH user for Claude Code
 # =============================================================================
-# Filter version: v9
+# Filter version: v10
 # Uses authorized_keys command= restriction to force all SSH commands through
 # a filter script. Simpler and more secure than rbash — single enforcement
 # point that blocks destructive commands, dangerous flags, and shell tricks.
@@ -95,17 +95,26 @@ cat > "$FILTER_SCRIPT" << 'FILTER'
 #                   plugin-name argument (allowlist: torrent-handler, claude-ssh)
 #                   to support multiple plugins on one NAS. New `scratch`
 #                   category writes to /tmp/claude-scratch/ for ephemeral data.
-# v8 — 2026-05-06: Plugin-name allowlist moved from hardcoded list to runtime
-#                   config file at /boot/config/plugins/claude-ssh/allowlist.cfg.
-#                   Default-deny on missing/empty/all-invalid file. Filter is
-#                   advisory; the privileged writer is the enforcer. Format:
-#                   `plugin <name>` lines, name regex ^[a-z][a-z0-9-]{0,63}$.
+# v8 — 2026-05-06: Plugin-name allowlist moved from hardcoded list to a
+#                   runtime config file (path changed again in v10; see
+#                   below). Default-deny on missing/empty/all-invalid file.
+#                   Filter is advisory; the privileged writer is the
+#                   enforcer. Format: `plugin <name>` lines, name regex
+#                   ^[a-z][a-z0-9-]{0,63}$.
 # v9 — 2026-05-06: Drop hook-sonarr/hook-radarr (Sonarr/Radarr-specific names
 #                   for what was always a generic appdata-script writer).
 #                   Replace with `appdata-script <container> <basename>` →
 #                   /mnt/user/appdata/<container>/scripts/. Container allowlist
 #                   added to allowlist.cfg as `container <name>` lines. Same
 #                   default-deny + name-regex semantics as the plugin allowlist.
+# v10 — 2026-05-12: Allowlist moved from /boot/config/plugins/claude-ssh/ to
+#                   /mnt/user/appdata/claude-ssh/. /boot is FAT32 with
+#                   dmask=0077 (kernel-forced mode 700 on every dir there) so
+#                   the constrained SSH user could never read the allowlist
+#                   from /boot. install-runtime.sh migrates any existing
+#                   /boot/config copy on upgrade and seeds a new template if
+#                   missing. The username file stays on /boot — only read
+#                   by root, not affected by the FAT mask.
 # =============================================================================
 
 # Disable filename globbing during validation. Filter logic uses unquoted
@@ -158,7 +167,7 @@ CW_CONTAINER_CATEGORIES="appdata-script"
 # comments, blank lines ignored. Default-deny on missing/empty file.
 # CLAUDE_SSH_ALLOWLIST_FILE override is test-only (sshd's default AcceptEnv
 # is empty, blocking it from live SSH).
-CW_ALLOWLIST_FILE="${CLAUDE_SSH_ALLOWLIST_FILE:-/boot/config/plugins/claude-ssh/allowlist.cfg}"
+CW_ALLOWLIST_FILE="${CLAUDE_SSH_ALLOWLIST_FILE:-/mnt/user/appdata/claude-ssh/allowlist.cfg}"
 
 cw_load_allowlist() {
     local kind="$1"
@@ -529,7 +538,7 @@ echo "=========================================="
 echo ""
 echo "Security:"
 echo "  Auth:       SSH key only (password locked)"
-echo "  Filter:     $FILTER_SCRIPT v9 (root-owned, validates every command)"
+echo "  Filter:     $FILTER_SCRIPT v10 (root-owned, validates every command)"
 echo "  Audit:      every command logged to syslog (tag: claude-shell)"
 echo "  Allowlist:  ls, find, cat, grep, df, du, ps, curl (GET), jq, numfmt, mkdir,"
 echo "              ln, xargs, zcat, tar, getent, groups, last, who, etc."

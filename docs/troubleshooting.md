@@ -73,7 +73,7 @@ the file is missing entirely (default-deny).
 Or from the shell as root:
 
 ```bash
-echo "container sonarr" >> /boot/config/plugins/claude-ssh/allowlist.cfg
+echo "container sonarr" >> /mnt/user/appdata/claude-ssh/allowlist.cfg
 ```
 
 The writer reads the allowlist on every invocation, so the change takes

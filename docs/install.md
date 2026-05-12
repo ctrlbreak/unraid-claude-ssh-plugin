@@ -66,7 +66,7 @@
 
 5. **Configure the allowlist**. Defaults to default-deny — no plugin or
    container writes succeed until you add entries. Either edit the file
-   directly (`/boot/config/plugins/claude-ssh/allowlist.cfg`) or use the
+   directly (`/mnt/user/appdata/claude-ssh/allowlist.cfg`) or use the
    Settings → Claude SSH → Allowlist editor in the web UI.
 
 ## Install via shell (without the web UI)

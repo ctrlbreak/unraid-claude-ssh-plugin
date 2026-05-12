@@ -6,7 +6,7 @@
  *   system_state      - file inventory (path, mtime, size, sha256)
  *   recent_activity   - 24h syslog counts: RECV / BLOCKED / writes per category
  *   audit_log         - paginated syslog lines with date+tag filters
- *   load_allowlist    - read /boot/config/plugins/claude-ssh/allowlist.cfg
+ *   load_allowlist    - read /mnt/user/appdata/claude-ssh/allowlist.cfg
  *   save_allowlist    - validate + atomically rewrite the allowlist
  *   dashboard         - compact summary for the dashboard tile
  *
@@ -29,7 +29,13 @@ const CS_USERNAME_REGEX = '/^[a-z][a-z0-9-]{0,31}$/';
 
 function cs_allowlist_path() {
     $env = getenv('CLAUDE_SSH_ALLOWLIST_FILE');
-    return $env !== false && $env !== '' ? $env : '/boot/config/plugins/claude-ssh/allowlist.cfg';
+    // Default canonical location: /mnt/user/appdata/claude-ssh/allowlist.cfg
+    // (on the array, mode 644, readable by the constrained SSH user). The
+    // file used to live in /boot/config/plugins/claude-ssh/ but /boot is
+    // FAT-mounted with dmask=0077, so the filter couldn't read it. Stays in
+    // lockstep with the shell-side default in the filter + writer setup
+    // scripts; test-claude-write-validation.sh asserts the parity.
+    return $env !== false && $env !== '' ? $env : '/mnt/user/appdata/claude-ssh/allowlist.cfg';
 }
 
 // Resolve the configured SSH username. Mirrors cs_resolve_username in the
@@ -442,6 +448,12 @@ function cs_normalise_names($input) {
 function cs_allowlist_header() {
     return <<<HEADER
 # claude-ssh allowlist — runtime config for the claude-write deploy channel.
+#
+# CANONICAL LOCATION: /mnt/user/appdata/claude-ssh/allowlist.cfg
+# Lives on the array (mode 644) because /boot is FAT-mounted with dmask=0077
+# (kernel-forced mode 700 on every dir), which would block the constrained
+# SSH user from reading the file. The filter + writer read this path on
+# every invocation.
 #
 # Edited via the Settings UI. Manual edits to comments or unrelated lines are
 # overwritten when this file is saved from the UI; edit the file directly to

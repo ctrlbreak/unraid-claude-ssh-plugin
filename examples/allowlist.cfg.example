@@ -1,8 +1,19 @@
 # claude-ssh allowlist — runtime config for the claude-write deploy channel.
 #
+# CANONICAL LOCATION ON THE NAS:
+#   /mnt/user/appdata/claude-ssh/allowlist.cfg
+#
+# Lives on the array (mode 644, readable by the constrained SSH user)
+# rather than /boot/config. /boot is FAT-mounted with dmask=0077, which
+# kernel-forces every directory there to mode 700 regardless of chmod —
+# the constrained user could not read the allowlist from /boot. Pre-v10
+# installs had the file in /boot/config/plugins/claude-ssh/ and silently
+# default-denied all plugin/container writes as a result;
+# install-runtime.sh migrates that to the new location on upgrade.
+#
 # Controls which plugins and containers the SSH user is allowed to write
-# into. Both the SSH filter and the privileged writer read this file
-# on every invocation; default-deny when empty or malformed.
+# into. Both the SSH filter and the privileged writer read this file on
+# every invocation; default-deny when empty or malformed.
 #
 # Format:
 #   plugin <name>      Allow claude-write plugin-page/plugin-include/

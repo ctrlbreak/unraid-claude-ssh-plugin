@@ -45,7 +45,7 @@ What it does **not** verify:
    ```
 
    Add them via the **Settings UI's Allowlist card** (claude-ssh tab) or
-   by editing `/boot/config/plugins/claude-ssh/allowlist.cfg` directly
+   by editing `/mnt/user/appdata/claude-ssh/allowlist.cfg` directly
    as root. The script's pre-flight will fail-fast with exact
    instructions if either is missing.
 
