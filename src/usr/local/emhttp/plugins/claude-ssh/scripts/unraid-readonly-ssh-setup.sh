@@ -23,7 +23,7 @@ set -euo pipefail
 # to /home/<user>/shell-filter.sh). Setup-script edits outside the heredoc
 # don't bump this. Read by exec.php (readVersionMarker), used by the install
 # banner below, asserted by tests/test-versions.sh.
-FILTER_VERSION="v10"
+FILTER_VERSION="v11"
 
 # --- Resolve SSH username (configurable, setup-time only) ----------------
 # Precedence: CLAUDE_SSH_USERNAME env var > /boot/config/plugins/claude-ssh/
@@ -121,6 +121,17 @@ cat > "$FILTER_SCRIPT" << 'FILTER'
 #                   /boot/config copy on upgrade and seeds a new template if
 #                   missing. The username file stays on /boot — only read
 #                   by root, not affected by the FAT mask.
+# v11 — 2026-05-13: Collapse plugin-{page,include,script,cfg} into a single
+#                   `plugin-file <plugin> <rel-path>` category. The rel-path
+#                   carries a relative path under /usr/local/emhttp/plugins/
+#                   <plugin>/ with up to 3 components; extension determines
+#                   mode (.sh/.py → 755, else 644). Narrow exception:
+#                   `event/<hook>` matching ^[a-z][a-z0-9_]{0,32}$ accepts an
+#                   extensionless basename at mode 755 (Unraid event-hook
+#                   convention). Filter is advisory — extension allowlist and
+#                   mode mapping are enforced by the privileged writer.
+#                   BREAKING for direct claude-write callers: old plugin-*
+#                   category names are no longer accepted.
 # =============================================================================
 
 # Disable filename globbing during validation. Filter logic uses unquoted
@@ -160,12 +171,14 @@ XARGS_INNER="cat stat head tail grep wc ls file readlink md5sum sha256sum awk cu
 # Categories by arity:
 # Simple (2 args:  claude-write <cat> <basename>):
 #   scratch
-# Plugin (3 args:  claude-write <cat> <plugin-name>    <basename>):
-#   plugin-page, plugin-include, plugin-script, plugin-cfg
+# Plugin (3 args:  claude-write <cat> <plugin-name>    <rel-path>):
+#   plugin-file   (v11: replaces plugin-{page,include,script,cfg};
+#                  rel-path may include up to 2 subdirectories — see writer
+#                  for extension allowlist, mode mapping, event/<hook> rule)
 # Container (3 args: claude-write <cat> <container>    <basename>):
 #   appdata-script
 CW_SIMPLE_CATEGORIES="scratch"
-CW_PLUGIN_CATEGORIES="plugin-page plugin-include plugin-script plugin-cfg"
+CW_PLUGIN_CATEGORIES="plugin-file"
 CW_CONTAINER_CATEGORIES="appdata-script"
 
 # v8/v9: plugin- and container-name allowlists live in a runtime config file.
@@ -376,12 +389,43 @@ for segment in "${SEGMENTS[@]}"; do
                 fi
             fi
 
-            # Basename: alphanumerics + . _ - only, no leading dot, no path bits.
-            case "$cw_name" in
-                .*|*/*|*..*) log_block "claude-write basename '$cw_name' invalid" ;;
-            esac
-            if ! echo "$cw_name" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$'; then
-                log_block "claude-write basename '$cw_name' fails pattern"
+            # v11: plugin-file accepts a rel-path (up to 3 components);
+            # everything else takes a flat basename. Extension allowlist and
+            # mode mapping are enforced by the privileged writer — filter
+            # just validates the rel-path shape so a malformed argv doesn't
+            # reach sudo at all.
+            if [ "$cw_cat" = "plugin-file" ]; then
+                case "$cw_name" in
+                    ..|*..*|/*|*/|.*) log_block "claude-write rel-path '$cw_name' invalid" ;;
+                esac
+                # Block embedded `//` and `./` traversal anywhere in the path.
+                case "$cw_name" in
+                    *//*|*/./*|*/.*) log_block "claude-write rel-path '$cw_name' invalid" ;;
+                esac
+                if [ "${#cw_name}" -gt 128 ]; then
+                    log_block "claude-write rel-path '$cw_name' too long (max 128)"
+                fi
+                cw_slashes=$(echo "$cw_name" | tr -cd '/' | wc -c | tr -d ' ')
+                if [ "$cw_slashes" -gt 2 ]; then
+                    log_block "claude-write rel-path '$cw_name' has too many components (max 3)"
+                fi
+                # Validate each component independently. Slash count is
+                # already capped at 2 so the IFS-split fits in 3 fields.
+                IFS='/' read -r _c1 _c2 _c3 <<< "$cw_name"
+                for _comp in "$_c1" "$_c2" "$_c3"; do
+                    [ -z "$_comp" ] && continue
+                    if ! echo "$_comp" | grep -qE '^[a-zA-Z0-9_][a-zA-Z0-9._-]*$'; then
+                        log_block "claude-write rel-path component '$_comp' invalid"
+                    fi
+                done
+            else
+                # scratch + appdata-script: flat basename rules unchanged.
+                case "$cw_name" in
+                    .*|*/*|*..*) log_block "claude-write basename '$cw_name' invalid" ;;
+                esac
+                if ! echo "$cw_name" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$'; then
+                    log_block "claude-write basename '$cw_name' fails pattern"
+                fi
             fi
             ;;
         xargs)

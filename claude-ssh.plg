@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.13a">
+  <!ENTITY version   "2026.05.13b">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,28 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.13b
+- **Collapse `plugin-{page,include,script,cfg}` into a single `plugin-file`
+  category.** New argv shape: `claude-write plugin-file &lt;plugin&gt; &lt;rel-path&gt;`,
+  where `&lt;rel-path&gt;` is a relative path under
+  `/usr/local/emhttp/plugins/&lt;plugin&gt;/` with up to 3 components. Filter `v10
+  → v11`, writer `v5 → v6`.
+- **Extension allowlist** (set on the writer):
+  `.page .php .cfg .sh .py .js .css .html .svg .txt .json`. Mode is driven by
+  extension — `.sh` / `.py` → 755, everything else → 644.
+- **Extensionless `event/&lt;hook&gt;` exception** (Unraid event-hook convention):
+  basename must match `^[a-z][a-z0-9_]{0,32}$`, depth-1 only, mode 755. No
+  other extensionless writes are permitted.
+- **Sudoers** enumerates three rel-path arities (`plugin-file * *`,
+  `plugin-file * */*`, `plugin-file * */*/*`) because sudo's `*` wildcard
+  does not match `/`. Old `plugin-{page,include,script,cfg}` grants removed.
+- **BREAKING for direct claude-write callers.** Scripts using the old
+  category names need updating to `plugin-file &lt;plugin&gt; &lt;rel-path&gt;`.
+  No transitional alias.
+- exec.php counters: dropped the four `plugin-*` rows; added `plugin-file`.
+- Settings UI label updated; stale `/boot/config/...` reference on the
+  Allowlist heading swapped for the real `/mnt/user/appdata/...` path.
+
 ###2026.05.13a
 - **Dashboard tile redesign.** Adopts the Unraid 7.x `$mytiles[column1]` API
   so the tile now sits inside the dashboard's column grid (half-width like

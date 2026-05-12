@@ -289,10 +289,7 @@ function buildRecentActivity() {
         'writes_rejected'=> 0,
         'writes_per_category' => [
             'scratch'        => 0,
-            'plugin-page'    => 0,
-            'plugin-include' => 0,
-            'plugin-script'  => 0,
-            'plugin-cfg'     => 0,
+            'plugin-file'    => 0,
             'appdata-script' => 0,
         ],
     ];

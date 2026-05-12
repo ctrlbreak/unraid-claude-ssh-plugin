@@ -164,7 +164,7 @@ table.cs-table tr.cs-row-missing { background: #fdecec; }
 </div>
 
 <div class="cs-card-section">
-  <h3>Allowlist <span class="cs-allow-path">/boot/config/plugins/claude-ssh/allowlist.cfg</span></h3>
+  <h3>Allowlist <span class="cs-allow-path">/mnt/user/appdata/claude-ssh/allowlist.cfg</span></h3>
   <p class="cs-allow-help">
     Controls which plugins and containers <code>claude-write</code> can deploy
     into. One name per line; lowercase letters, digits, and hyphens (max 64).
@@ -173,7 +173,7 @@ table.cs-table tr.cs-row-missing { background: #fdecec; }
   </p>
   <div class="cs-allow-grid">
     <label>
-      <span>Plugins (3-arg <code>plugin-page</code>, <code>plugin-include</code>, <code>plugin-script</code>, <code>plugin-cfg</code>)</span>
+      <span>Plugins (3-arg <code>plugin-file</code>)</span>
       <textarea id="cs-allow-plugins" rows="6" spellcheck="false" placeholder="torrent-handler&#10;claude-ssh"></textarea>
     </label>
     <label>

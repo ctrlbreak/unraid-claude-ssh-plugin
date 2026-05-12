@@ -91,13 +91,26 @@ run_case allow 'grep "A\|B" /etc/hosts'
 run_case allow 'ls 2>/dev/null'
 run_case allow 'ls > /dev/null'
 run_case allow 'tar -tf /tmp/foo.tar'
-# v9 simple categories
+# Simple category
 run_case allow 'claude-write scratch foo.txt'
-# v9 plugin categories with plugin-name allowlist
-run_case allow 'claude-write plugin-page torrent-handler Foo.page'
-run_case allow 'claude-write plugin-page claude-ssh ClaudeSsh.page'
-run_case allow 'claude-write plugin-include claude-ssh exec.php'
-run_case allow 'claude-write plugin-script claude-ssh install-runtime.sh'
+# v11 plugin-file: top-level files, 1-component rel-path
+run_case allow 'claude-write plugin-file torrent-handler Foo.page'
+run_case allow 'claude-write plugin-file claude-ssh ClaudeSsh.page'
+run_case allow 'claude-write plugin-file claude-ssh default.cfg'
+# v11 plugin-file: 2-component rel-path (typical subdir layouts)
+run_case allow 'claude-write plugin-file claude-ssh include/exec.php'
+run_case allow 'claude-write plugin-file claude-ssh scripts/install-runtime.sh'
+run_case allow 'claude-write plugin-file torrent-handler javascript/foo.js'
+run_case allow 'claude-write plugin-file torrent-handler sheets/style.css'
+run_case allow 'claude-write plugin-file torrent-handler images/icon.svg'
+# v11 plugin-file: 3-component rel-path (vendored python package case)
+run_case allow 'claude-write plugin-file torrent-handler scripts/torrent_handler/relink.py'
+run_case allow 'claude-write plugin-file torrent-handler scripts/torrent_handler/__init__.py'
+run_case allow 'claude-write plugin-file torrent-handler javascript/lib/foo.js'
+# v11 plugin-file: event/<hook> extensionless exception (depth-1, lowercase)
+run_case allow 'claude-write plugin-file claude-ssh event/started'
+run_case allow 'claude-write plugin-file claude-ssh event/stopping_svcs'
+run_case allow 'claude-write plugin-file claude-ssh event/disks_mounted'
 # v9 container category (appdata-script) with container allowlist
 run_case allow 'claude-write appdata-script sonarr foo.sh'
 run_case allow 'claude-write appdata-script radarr cleanup-old.sh'
@@ -133,10 +146,25 @@ run_case block 'find /mnt > /tmp/claude-../etc/foo'
 # Legacy hook-* categories removed — must now reject as unknown.
 run_case block 'claude-write hook-sonarr foo.sh'
 run_case block 'claude-write hook-radarr foo.sh'
-# Plugin allowlist enforcement.
-run_case block 'claude-write plugin-page badplugin Foo.page'
-run_case block 'claude-write plugin-page torrent-handler'
-run_case block 'claude-write plugin-page torrent-handler Foo.page extra'
+# v11: old plugin-* category names are no longer accepted.
+run_case block 'claude-write plugin-page torrent-handler Foo.page'
+run_case block 'claude-write plugin-include torrent-handler exec.php'
+run_case block 'claude-write plugin-script torrent-handler relink.py'
+run_case block 'claude-write plugin-cfg torrent-handler default.cfg'
+# Plugin allowlist enforcement (v11 form).
+run_case block 'claude-write plugin-file badplugin Foo.page'
+run_case block 'claude-write plugin-file torrent-handler'
+run_case block 'claude-write plugin-file torrent-handler Foo.page extra'
+# v11 plugin-file rel-path SHAPE rejections (filter enforces structure;
+# extension allowlist + event/<hook> semantics belong to the writer).
+run_case block 'claude-write plugin-file torrent-handler ../escape.sh'         # parent traversal
+run_case block 'claude-write plugin-file torrent-handler scripts/../escape.sh' # mid-path traversal
+run_case block 'claude-write plugin-file torrent-handler /etc/passwd'          # leading slash
+run_case block 'claude-write plugin-file torrent-handler scripts/'             # trailing slash
+run_case block 'claude-write plugin-file torrent-handler scripts//foo.py'      # empty middle component
+run_case block 'claude-write plugin-file torrent-handler .hidden.sh'           # leading dot
+run_case block 'claude-write plugin-file torrent-handler scripts/.hidden.sh'   # leading dot in component
+run_case block 'claude-write plugin-file torrent-handler a/b/c/d.py'           # 4 components > max 3
 # appdata-script container allowlist enforcement.
 run_case block 'claude-write appdata-script bazarr foo.sh'        # not in sandbox allowlist
 run_case block 'claude-write appdata-script sonarr'                # missing basename
@@ -153,8 +181,8 @@ EMPTY_ALLOWLIST="$SANDBOX_DIR/empty.cfg"
 : > "$EMPTY_ALLOWLIST"
 CLAUDE_SSH_ALLOWLIST_FILE_BACKUP="$CLAUDE_SSH_ALLOWLIST_FILE"
 export CLAUDE_SSH_ALLOWLIST_FILE="$EMPTY_ALLOWLIST"
-run_case block 'claude-write plugin-page torrent-handler Foo.page'
-run_case block 'claude-write plugin-page claude-ssh ClaudeSsh.page'
+run_case block 'claude-write plugin-file torrent-handler Foo.page'
+run_case block 'claude-write plugin-file claude-ssh ClaudeSsh.page'
 run_case block 'claude-write appdata-script sonarr foo.sh'
 run_case block 'claude-write appdata-script radarr foo.sh'
 # Cross-isolation: container line in plugin slot doesn't grant plugin access,
@@ -162,13 +190,13 @@ run_case block 'claude-write appdata-script radarr foo.sh'
 PLUGIN_ONLY="$SANDBOX_DIR/plugin-only.cfg"
 echo "plugin foo" > "$PLUGIN_ONLY"
 export CLAUDE_SSH_ALLOWLIST_FILE="$PLUGIN_ONLY"
-run_case allow 'claude-write plugin-page foo Foo.page'
+run_case allow 'claude-write plugin-file foo Foo.page'
 run_case block 'claude-write appdata-script foo bar.sh'   # plugin lines don't authorise containers
 CONTAINER_ONLY="$SANDBOX_DIR/container-only.cfg"
 echo "container foo" > "$CONTAINER_ONLY"
 export CLAUDE_SSH_ALLOWLIST_FILE="$CONTAINER_ONLY"
 run_case allow 'claude-write appdata-script foo bar.sh'
-run_case block 'claude-write plugin-page foo Foo.page'    # container lines don't authorise plugins
+run_case block 'claude-write plugin-file foo Foo.page'    # container lines don't authorise plugins
 # Restore for any subsequent cases.
 export CLAUDE_SSH_ALLOWLIST_FILE="$CLAUDE_SSH_ALLOWLIST_FILE_BACKUP"
 

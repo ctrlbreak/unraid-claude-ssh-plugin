@@ -95,12 +95,15 @@ run_case block 'ls > /boot/config/claude-x'
 run_case block 'ls > /boot/config/tmp/claude-x'
 
 # ---- claude-write categories: none target /boot/config/ ----
-# Pick a few to lock the contract. plugin-cfg writes to
-# /usr/local/emhttp/plugins/<plugin>/, NOT /boot/config/.
-run_case block 'claude-write plugin-cfg claude-ssh /boot/config/foo.cfg'   # path in basename → invalid
-run_case block 'claude-write plugin-cfg ../config foo.cfg'                  # path traversal in plugin-name
-run_case block 'claude-write plugin-cfg claude-ssh ../allowlist.cfg'        # path traversal in basename
-run_case block 'claude-write scratch ../boot-config-foo'                    # leading dot blocked anyway
+# plugin-file writes to /usr/local/emhttp/plugins/<plugin>/, NOT /boot/config/.
+# The rel-path validation (no `..`, no leading `/`) blocks every attempt
+# to redirect a plugin-file write into /boot/config/ — both via the
+# rel-path arg and via plugin-name traversal.
+run_case block 'claude-write plugin-file claude-ssh /boot/config/foo.cfg'  # leading-slash rel-path
+run_case block 'claude-write plugin-file ../config foo.cfg'                # path traversal in plugin-name
+run_case block 'claude-write plugin-file claude-ssh ../allowlist.cfg'      # parent traversal in rel-path
+run_case block 'claude-write plugin-file claude-ssh include/../../etc/foo' # mid-path traversal
+run_case block 'claude-write scratch ../boot-config-foo'                   # leading dot blocked anyway
 
 # ---- Read access to /boot/config IS allowed (this is intentional) ----
 # The concern is writes; reads via cat/ls/grep are fine.

@@ -66,23 +66,31 @@ posture, not a containment boundary against root.
 
 This is the most important caveat to internalise.
 
-The writer accepts categories like `plugin-script` (writes `.sh` / `.py` to
-`/usr/local/emhttp/plugins/<plugin>/scripts/`, mode 755) and `appdata-script`
-(writes `.sh` to `/mnt/user/appdata/<container>/scripts/`, mode 755). **Once
-written, those files are executable by whatever invokes them** — the Unraid
-WebUI for plugin assets, the relevant container for appdata scripts.
+The `plugin-file` category writes anywhere under
+`/usr/local/emhttp/plugins/<plugin>/` (up to 3 path components), with mode
+determined by extension — `.sh` / `.py` and extensionless `event/<hook>` files
+land mode 755. The `appdata-script` category writes `.sh` to
+`/mnt/user/appdata/<container>/scripts/` (mode 755). **Once written, those
+files are executable by whatever invokes them** — the Unraid WebUI for
+plugin assets, the relevant container for appdata scripts, and Unraid
+itself for `event/<hook>` files (run at system events as root).
 
 So if you allowlist `plugin foo`, you've effectively granted the SSH user
-**code-execution scope inside the foo plugin's runtime context**. Treat
-allowlist entries as a code-execution decision, not a "let me deploy a
-config file" decision.
+**code-execution scope inside the foo plugin's runtime context**: any
+`.sh`, `.py`, `.php` (loaded by emhttp), or `event/<hook>` file under
+`/usr/local/emhttp/plugins/foo/` can become a code-execution vehicle.
+Treat allowlist entries as a code-execution decision, not a "let me deploy
+a config file" decision. The category names + extension allowlist are
+convention-enforcement; the plugin allowlist is the real blast-radius
+boundary.
 
 Concretely:
 
 - Don't allowlist plugins you didn't write or audit.
 - Don't allowlist a container's scripts dir if the container runs as root.
-- Don't allowlist `plugin-include` for a plugin whose `.php` files run on
-  every WebUI request unless you trust the writer of the file content.
+- A plugin whose `.php` files run on every WebUI request, or whose
+  `event/<hook>` files run on system events as root, is *especially*
+  high-value — only allowlist if you trust the writer of the file content.
 
 ### Replay / forgery of audit logs
 
@@ -146,6 +154,25 @@ The filter is fast-path; the writer is correctness. If the filter and the
 writer ever diverge on whether a request is acceptable, the writer wins. The
 test suite (`test-sudoers-drift.sh`, `test-claude-write-validation.sh`)
 enforces lockstep between them.
+
+### Load-bearing assumption: target-dir perms
+
+The atomic-write step (`mv -f $TMP_DEST $DEST`) follows symlinks. The writer
+relies on the **target directory** being root-owned and not writable by the
+constrained SSH user, so the user can't plant a redirecting symlink at the
+destination basename and have the writer follow it into `/etc/...` or
+`/root/...`.
+
+- `/usr/local/emhttp/plugins/<plugin>/` directories are root-owned 755 by
+  Unraid; the SSH user is in `users`, not root.
+- `/mnt/user/appdata/<container>/scripts/` is normally root-owned;
+  containers don't expose write access to the host's SSH user.
+- `/tmp/claude-scratch/` is created by the writer (root-owned).
+
+If a future change loosens those dir perms (or a plugin install creates
+sub-directories with permissive ownership) the symlink-following assumption
+breaks. The category model is convention-enforcement on top of the plugin
+allowlist; **the plugin allowlist is the real blast-radius boundary**.
 
 ## What to do before granting your first SSH key
 

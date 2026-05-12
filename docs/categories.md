@@ -10,19 +10,28 @@ flat — adding a new category is a deliberate decision, not a config knob.
 | Category | Argv shape | Target directory | Allowed extensions | Mode | Allowlist gate |
 |---|---|---|---|---|---|
 | `scratch` | `scratch <basename>` | `/tmp/claude-scratch/` | `.sh .py .txt .json .log .conf .md` | 644 (755 for `.sh` / `.py`) | none |
-| `plugin-page` | `plugin-page <plugin> <basename>` | `/usr/local/emhttp/plugins/<plugin>/` | `.page` | 644 | `plugin <name>` |
-| `plugin-include` | `plugin-include <plugin> <basename>` | `/usr/local/emhttp/plugins/<plugin>/include/` | `.php .sh` | 644 (755 for `.sh`) | `plugin <name>` |
-| `plugin-script` | `plugin-script <plugin> <basename>` | `/usr/local/emhttp/plugins/<plugin>/scripts/` | `.py .sh` | 755 | `plugin <name>` |
-| `plugin-cfg` | `plugin-cfg <plugin> <basename>` | `/usr/local/emhttp/plugins/<plugin>/` | `.cfg` | 644 | `plugin <name>` |
+| `plugin-file` | `plugin-file <plugin> <rel-path>` | `/usr/local/emhttp/plugins/<plugin>/<rel-path>` | `.page .php .cfg .sh .py .js .css .html .svg .txt .json` (plus extensionless `event/<hook>`) | 644, or 755 for `.sh` / `.py` / `event/<hook>` | `plugin <name>` |
 | `appdata-script` | `appdata-script <container> <basename>` | `/mnt/user/appdata/<container>/scripts/` | `.sh` | 755 | `container <name>` |
 
 ## Common rules
 
-**Basename validation** (applies to every category):
+**Basename / rel-path validation:**
 
-- Must match `^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$` (1-128 chars).
-- Must have an extension (no `.` prefix, no path separators, no `..`).
-- The extension must be in the allowed list for the category.
+- `scratch` and `appdata-script` accept a flat basename matching
+  `^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$` (1-128 chars, must have an extension,
+  no leading dot, no path separators).
+- `plugin-file` accepts a **rel-path** under `/usr/local/emhttp/plugins/
+  <plugin>/`:
+  - Up to **3 path components** (basename, `subdir/basename`, or
+    `subdir/subdir/basename`).
+  - Each component matches `^[a-zA-Z0-9_][a-zA-Z0-9._-]*$` (leading char
+    alnum or `_`; the trailing component carries the extension).
+  - Total length ≤ 128 chars.
+  - Reject explicitly: `..` anywhere, leading `/`, trailing `/`, empty
+    middle component (`//`), leading `.` on any component, any control
+    char.
+- Every basename must have an extension in the category's allowed list,
+  **except** the extensionless `event/<hook>` exception (see below).
 
 **Target name validation** (`<plugin>` / `<container>` for 3-arg categories):
 
@@ -46,7 +55,36 @@ intact — never half-written.
 **Backups:** every write to a non-`scratch` category that overwrites an
 existing file backs the prior version up to
 `/mnt/cache/appdata/claude-write-backups/` first, with timestamped filenames
-and rotation to the last 10 entries per `<category>__<target>__<basename>`.
+and rotation to the last 10 entries per
+`<category>__<target>[__<subdir-flat>]__<basename>`. For `plugin-file`
+writes into a subdirectory the subdir's `/` is flattened to `__` in the
+backup key, e.g. `plugin-file__torrent-handler__scripts__nightly.sh`.
+
+## `plugin-file` — extension allowlist & mode
+
+| Extension | Mode |
+|---|---|
+| `.sh` `.py` | **755** (executable) |
+| `.page` `.php` `.cfg` `.js` `.css` `.html` `.svg` `.txt` `.json` | 644 |
+| (none) — only under `event/<hook>` | **755** |
+
+Other extensions are rejected.
+
+### The `event/<hook>` exception
+
+Unraid invokes plugin event hooks via files like
+`/usr/local/emhttp/plugins/<plugin>/event/started`, `event/stopping_svcs`,
+`event/disks_mounted`. By convention these are **extensionless** bash
+scripts. `plugin-file` allows an extensionless basename only when:
+
+- The rel-path is exactly `event/<hook>` (depth-1, no further nesting).
+- The basename matches `^[a-z][a-z0-9_]{0,32}$` (lowercase letter, then
+  lowercase / digit / underscore — case-sensitive).
+- Mode is set to **755**.
+
+Nothing else is permitted to be extensionless. `notevent/started` (wrong
+subdir), `event/Started` (uppercase), and `event/sub/hook` (nested) all
+reject.
 
 ## Worked examples
 
@@ -61,25 +99,42 @@ No allowlist required. Files survive in `/tmp` until reboot. Useful for ad-hoc
 deploys where you don't want a permanent home, or for piping data through the
 NAS as a one-off.
 
-### `plugin-page` — Unraid web UI tab
+### `plugin-file` — top-level `.page`
 
 ```bash
 allowlist=/mnt/user/appdata/claude-ssh/allowlist.cfg
 echo "plugin torrent-handler" | ssh root@nas "tee -a ${allowlist}"
 
 cat my-tab.page | ssh claude@nas \
-  'claude-write plugin-page torrent-handler MyTab.page'
+  'claude-write plugin-file torrent-handler MyTab.page'
 # → /usr/local/emhttp/plugins/torrent-handler/MyTab.page   mode 644
 ```
 
 The web UI re-scans `.page` files on next request — no service restart needed.
 
-### `plugin-script` — plugin's `scripts/` directory
+### `plugin-file` — into `scripts/`
 
 ```bash
 cat my-cron.sh | ssh claude@nas \
-  'claude-write plugin-script torrent-handler nightly.sh'
+  'claude-write plugin-file torrent-handler scripts/nightly.sh'
 # → /usr/local/emhttp/plugins/torrent-handler/scripts/nightly.sh   mode 755
+```
+
+### `plugin-file` — vendored Python package (3-component)
+
+```bash
+cat relink.py | ssh claude@nas \
+  'claude-write plugin-file torrent-handler scripts/torrent_handler/relink.py'
+# → /usr/local/emhttp/plugins/torrent-handler/scripts/torrent_handler/relink.py
+#   mode 755
+```
+
+### `plugin-file` — event hook (extensionless)
+
+```bash
+cat my-hook.sh | ssh claude@nas \
+  'claude-write plugin-file claude-ssh event/started'
+# → /usr/local/emhttp/plugins/claude-ssh/event/started   mode 755
 ```
 
 ### `appdata-script` — container hook directory
@@ -98,16 +153,24 @@ Works for any container that keeps hooks under
 
 ## Why these categories?
 
-The category set reflects what the original deployment needed: write hooks
-into Sonarr / Radarr appdata, write plugin assets into a few in-development
-plugins, and an escape hatch (`scratch`) for ad-hoc deploys. Each category is
-defence-in-depth: the SSH filter rejects unrecognised categories at the SSH
-layer (advisory), and the privileged writer rejects them again (enforcement).
+The category set reflects what real Unraid plugins need: write hooks into
+Sonarr / Radarr appdata, write plugin assets (pages, includes, scripts,
+configs, JS, CSS, images, event hooks) into in-development plugins, and an
+escape hatch (`scratch`) for ad-hoc deploys.
 
-If you need a category that doesn't fit the table:
+The earlier release (filter v10) had four separate plugin-* categories —
+`plugin-page`, `plugin-include`, `plugin-script`, `plugin-cfg` — that each
+mapped to a single subdirectory and a single extension. Filter v11 collapsed
+those into a single `plugin-file` with a rel-path argument because real
+plugins use many subdirectory conventions (`scripts/`, `include/`,
+`javascript/`, `sheets/`, `images/`, `event/`, etc.) and the per-subdir
+categories left most of them unreachable. The security boundary is the
+**plugin allowlist** plus the extension allowlist — not the category name.
+
+If you need a new category (or a new extension under `plugin-file`):
 
 - Patch `unraid-readonly-ssh-setup.sh` (filter source), `claude-write-setup.sh`
-  (writer source), and `include/exec.php` (counter row).
+  (writer source), and `include/exec.php` (counter row, if adding a category).
 - Update `tests/test-sudoers-drift.sh` — the cross-check ensures all four
   sites stay in lockstep.
 - Bump `WRITER_VERSION` (and `FILTER_VERSION` if the filter side changed too)

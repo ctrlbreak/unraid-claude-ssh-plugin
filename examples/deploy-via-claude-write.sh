@@ -1,9 +1,9 @@
 #!/bin/bash
 # Sample client for the claude-write deploy channel.
 #
-# Demonstrates the four common categories: scratch (ephemeral), plugin-page
-# (Unraid plugin asset), plugin-script (plugin's scripts dir), and
-# appdata-script (container hook). Adjust the NAS / KEY / paths to your
+# Demonstrates three categories: scratch (ephemeral), plugin-file (write
+# anywhere under /usr/local/emhttp/plugins/<plugin>/, up to 3 components),
+# and appdata-script (container hook). Adjust the NAS / KEY / paths to your
 # environment before running.
 #
 # Each call prints either:
@@ -33,10 +33,10 @@ deploy() {
 echo "scratch demo content" \
     | deploy "scratch / hello.txt" 'claude-write scratch hello.txt'
 
-# 2. plugin-page — requires `plugin <name>` allowlist entry.
+# 2. plugin-file — top-level .page asset; requires `plugin <name>` allowlist entry.
 cat <<'PAGE' \
-    | deploy "plugin-page / my-plugin / Demo.page" \
-        'claude-write plugin-page my-plugin Demo.page'
+    | deploy "plugin-file / my-plugin / Demo.page" \
+        'claude-write plugin-file my-plugin Demo.page'
 Title="Demo"
 Type="xmenu:Tools"
 Icon="info-circle"
@@ -44,10 +44,10 @@ Icon="info-circle"
 <div>Hello from claude-write.</div>
 PAGE
 
-# 3. plugin-script — requires `plugin <name>` allowlist entry.
+# 3. plugin-file — script under scripts/; requires `plugin <name>` allowlist entry.
 cat <<'SH' \
-    | deploy "plugin-script / my-plugin / hourly.sh" \
-        'claude-write plugin-script my-plugin hourly.sh'
+    | deploy "plugin-file / my-plugin / scripts/hourly.sh" \
+        'claude-write plugin-file my-plugin scripts/hourly.sh'
 #!/bin/bash
 echo "deployed via claude-write at $(date -Is)"
 SH

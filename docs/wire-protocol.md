@@ -30,14 +30,15 @@ extra whitespace not part of an argument, or shell metacharacters
 claude-write scratch <basename>
 ```
 
-### Plugin (3-arg)
+### Plugin (3-arg, rel-path)
 
 ```
-claude-write plugin-page    <plugin-name> <basename>
-claude-write plugin-include <plugin-name> <basename>
-claude-write plugin-script  <plugin-name> <basename>
-claude-write plugin-cfg     <plugin-name> <basename>
+claude-write plugin-file <plugin-name> <rel-path>
 ```
+
+`<rel-path>` is a relative path under `/usr/local/emhttp/plugins/<plugin>/`
+with up to 3 components (basename, `subdir/basename`, or
+`subdir/subdir/basename`). See "Argument validation" below.
 
 ### Container (3-arg)
 
@@ -52,9 +53,10 @@ extra args"`).
 
 | Argument | Pattern | Notes |
 |---|---|---|
-| `<category>` | one of the seven listed above | unknown → reject |
+| `<category>` | one of the three above | unknown → reject |
 | `<plugin-name>` / `<container-name>` | `^[a-z][a-z0-9-]{0,63}$` | must also be in `allowlist.cfg` |
-| `<basename>` | `^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$` | no leading `.`, no `/`, no `..` |
+| `<basename>` (`scratch`, `appdata-script`) | `^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$` | no leading `.`, no `/`, no `..` |
+| `<rel-path>` (`plugin-file`) | up to 3 components, each `^[a-zA-Z0-9_][a-zA-Z0-9._-]*$`; total ≤ 128 chars; no `..`, leading `/`, trailing `/`, `//`, or leading-`.` component | extension drives mode (see [`categories.md`](categories.md)); narrow extensionless exception for `event/<hook>` (depth-1, `^[a-z][a-z0-9_]{0,32}$`, mode 755) |
 | extension | category-specific allowlist | derived from `<basename>` after the last `.` |
 
 ## Stdin
@@ -84,7 +86,8 @@ layer, before the writer sees the argv at all. Those produce a structured
 ```
 claude-write: OK
   category: <cat>
-  plugin:   <name>      ← only for 3-arg categories
+  plugin:   <name>      ← only for plugin-file (label changes to `container:` for appdata-script)
+  rel-path: <rel-path>  ← only for plugin-file
   dest:     <full-path-on-NAS>
   size:     <bytes>
   mode:     <octal>
@@ -106,12 +109,17 @@ Common reasons:
 
 - `missing category`
 - `unknown category '<value>'`
-- `missing plugin-name` / `missing container name` / `missing basename`
+- `missing plugin-name` / `missing container name` / `missing basename` / `missing rel-path`
 - `unexpected extra args`
 - `<kind>-name '<value>' not in allowlist`
 - `invalid basename '<value>'`
 - `basename must match [a-zA-Z0-9._-], 1-128 chars`
-- `basename must have extension`
+- `basename must have extension` (`plugin-file` form: `basename must have extension (only event/<hook> may be extensionless)`)
+- `invalid rel-path '<value>'` (`plugin-file`)
+- `rel-path too long (max 128)` (`plugin-file`)
+- `rel-path has too many components (max 3)` (`plugin-file`)
+- `subdir component '<value>' invalid` (`plugin-file`)
+- `basename '<value>' invalid` (`plugin-file`)
 - `extension '<ext>' not allowed for <cat> (need: <list>)`
 - `empty stdin`
 - `content exceeds 2097152B limit (got <bytes>)`
@@ -132,8 +140,11 @@ Every accept and reject lands in syslog (`/var/log/syslog`) with:
 Format on accept (writer):
 
 ```
-claude-write: WROTE category=<cat> [plugin=<name>|container=<name>] dest=<path> size=<bytes> sha256=<hex> backup=<path-or-none>
+claude-write: WROTE category=<cat> [plugin=<name>|container=<name>] [rel=<rel-path>] dest=<path> size=<bytes> sha256=<hex> backup=<path-or-none>
 ```
+
+The `rel=<rel-path>` field is present only for `plugin-file` writes (it
+echoes the third argv slot for audit-log reconstruction).
 
 Format on reject (writer):
 
@@ -165,6 +176,7 @@ updating; patch-level changes preserve argv shapes and exit codes.
 
 | Writer version | Change |
 |---|---|
+| `v6` | Collapsed `plugin-{page,include,script,cfg}` into `plugin-file <plugin> <rel-path>`. Extension allowlist drives mode; narrow extensionless `event/<hook>` exception. **Breaking** for direct callers of the old category names. |
 | `v5` | Allowlist moved off `/boot/config` (FAT mount blocks the SSH user from reading) to `/mnt/user/appdata/claude-ssh/`. |
 | `v4` | Collapsed `hook-sonarr` / `hook-radarr` into `appdata-script <container>`. |
 | `v3` | Plugin-name allowlist moved to runtime config. |

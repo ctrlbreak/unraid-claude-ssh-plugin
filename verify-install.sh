@@ -513,24 +513,24 @@ write_ok_case "3.1" "scratch write" \
     "scratch verify-${TS}-1.txt" \
     "/tmp/claude-scratch/verify-${TS}-1.txt" "644"
 
-# 3.2 plugin-script (.sh → 755)
-write_ok_case "3.2" "plugin-script (allowlisted)" \
-    "plugin-script verify-test verify-${TS}-2.sh" \
+# 3.2 plugin-file (.sh in scripts/ → 755)
+write_ok_case "3.2" "plugin-file scripts/.sh (allowlisted)" \
+    "plugin-file verify-test scripts/verify-${TS}-2.sh" \
     "/usr/local/emhttp/plugins/verify-test/scripts/verify-${TS}-2.sh" "755"
 
-# 3.3 plugin-page (.page → 644)
-write_ok_case "3.3" "plugin-page (allowlisted)" \
-    "plugin-page verify-test verify-${TS}-3.page" \
+# 3.3 plugin-file (.page at top level → 644)
+write_ok_case "3.3" "plugin-file .page (allowlisted)" \
+    "plugin-file verify-test verify-${TS}-3.page" \
     "/usr/local/emhttp/plugins/verify-test/verify-${TS}-3.page" "644"
 
-# 3.4 plugin-include (.php → 644)
-write_ok_case "3.4" "plugin-include (allowlisted)" \
-    "plugin-include verify-test verify-${TS}-4.php" \
+# 3.4 plugin-file (include/.php → 644)
+write_ok_case "3.4" "plugin-file include/.php (allowlisted)" \
+    "plugin-file verify-test include/verify-${TS}-4.php" \
     "/usr/local/emhttp/plugins/verify-test/include/verify-${TS}-4.php" "644"
 
-# 3.5 plugin-cfg (.cfg → 644)
-write_ok_case "3.5" "plugin-cfg (allowlisted)" \
-    "plugin-cfg verify-test verify-${TS}-5.cfg" \
+# 3.5 plugin-file (.cfg at top level → 644)
+write_ok_case "3.5" "plugin-file .cfg (allowlisted)" \
+    "plugin-file verify-test verify-${TS}-5.cfg" \
     "/usr/local/emhttp/plugins/verify-test/verify-${TS}-5.cfg" "644"
 
 # 3.6 appdata-script (.sh → 755)
@@ -540,19 +540,19 @@ write_ok_case "3.6" "appdata-script (allowlisted)" \
 
 # 3.7 non-allowlisted plugin must reject
 write_reject_case "3.7" "non-allowlisted plugin" \
-    "plugin-script not-in-allowlist verify-${TS}-7.sh"
+    "plugin-file not-in-allowlist scripts/verify-${TS}-7.sh"
 
 # 3.8 non-allowlisted container must reject
 write_reject_case "3.8" "non-allowlisted container" \
     "appdata-script not-in-allowlist verify-${TS}-8.sh"
 
-# 3.9 path traversal in basename must reject
-write_reject_case "3.9" "path traversal in basename" \
-    "plugin-script verify-test ../verify-${TS}-9.sh"
+# 3.9 path traversal in rel-path must reject
+write_reject_case "3.9" "path traversal in rel-path" \
+    "plugin-file verify-test ../verify-${TS}-9.sh"
 
 # 3.10 bad extension must reject
 write_reject_case "3.10" "bad extension (.exe)" \
-    "plugin-script verify-test verify-${TS}-10.exe"
+    "plugin-file verify-test verify-${TS}-10.exe"
 
 # ===========================================================================
 # Layer 4 — Audit log (root SSH)

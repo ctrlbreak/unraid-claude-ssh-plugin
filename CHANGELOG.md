@@ -8,6 +8,55 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.13b — 2026-05-13
+
+- **Collapse `plugin-{page,include,script,cfg}` into a single
+  `plugin-file` category.** New argv shape:
+  `claude-write plugin-file <plugin> <rel-path>` where `<rel-path>` is a
+  relative path under `/usr/local/emhttp/plugins/<plugin>/` with up to 3
+  components (basename, `subdir/basename`, or `subdir/subdir/basename`).
+  Each component matches `^[a-zA-Z0-9_][a-zA-Z0-9._-]*$`; `..` /
+  leading-`/` / trailing-`/` / `//` / leading-`.` all reject. Filter
+  bumped to `v11`, writer to `v6`.
+- **Extension allowlist on the writer**: `.page .php .cfg .sh .py .js
+  .css .html .svg .txt .json`. Mode is driven by extension —
+  `.sh` / `.py` → **755**, everything else → 644.
+- **Narrow `event/<hook>` extensionless exception** for the Unraid
+  event-hook convention. When the rel-path is exactly `event/<hook>`
+  (depth-1) and the basename matches `^[a-z][a-z0-9_]{0,32}$`
+  (lowercase only), the writer accepts the extensionless basename at
+  mode **755**. Nothing else may be extensionless.
+- **Sudoers enumerates three rel-path arities** because sudo's `*`
+  wildcard does **not** match `/`. The new rule lists
+  `plugin-file * *`, `plugin-file * */*`, and `plugin-file * */*/*`
+  explicitly. The writer caps depth at 3 components, so a 4-slash
+  pattern would be unreachable by construction.
+- **Old `plugin-{page,include,script,cfg}` grants and code paths are
+  removed in the same commit — no transitional alias.** Direct callers
+  of the old category names will fail on first invocation after the
+  upgrade. Migrate as follows:
+  ```
+  claude-write plugin-page    foo Bar.page              ⇒ claude-write plugin-file foo Bar.page
+  claude-write plugin-include foo bar.php               ⇒ claude-write plugin-file foo include/bar.php
+  claude-write plugin-script  foo bar.py                ⇒ claude-write plugin-file foo scripts/bar.py
+  claude-write plugin-cfg     foo bar.cfg               ⇒ claude-write plugin-file foo bar.cfg
+  ```
+- **Audit log** gains a `rel=<rel-path>` field on `plugin-file` WROTE
+  entries; the legacy `category=plugin-{page,include,script,cfg}` keys
+  in `exec.php`'s counters are collapsed into the single
+  `category=plugin-file` row.
+- **Settings UI** label updated (Plugins textarea now lists just
+  `plugin-file`); a stale `/boot/config/...` reference on the Allowlist
+  heading swapped for the real `/mnt/user/appdata/...` path.
+- **Tests**: `test-filter-regression.sh` (rewrite for `plugin-file`
+  rel-path shape + 4-component reject), `test-claude-write-validation.sh`
+  (cross-check + new drift checks for wrapper byte-identity, priv-binary
+  name, env_keep absence, sudoers arity coverage, AND behavioural writer
+  cases for every accepted extension and the `event/<hook>` exception),
+  `test-sudoers-drift.sh` (asserts all three rel-path arities present and
+  no 4-slash pattern), `test-boot-config-write-block.sh` (refreshed to
+  use `plugin-file`).
+
 ## 2026.05.13a — 2026-05-12
 
 - **Dashboard tile redesign.** Adopts the Unraid 7.x `$mytiles[column1]`

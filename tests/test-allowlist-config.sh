@@ -1,8 +1,8 @@
 #!/bin/bash
-# Behavioural test for the runtime plugin-name allowlist (filter v8 / writer v3).
+# Behavioural test for the runtime plugin-name allowlist (filter v8+ / writer v3+).
 #
 # Exercises the parser via the live filter: for each fixture allowlist.cfg, we
-# run the filter with a `claude-write plugin-page <name> foo.page` command and
+# run the filter with a `claude-write plugin-file <name> Foo.page` command and
 # assert ALLOW vs BLOCK. This tests the parser through the same code path the
 # live SSH filter uses on the NAS.
 #
@@ -52,10 +52,10 @@ FAILED=()
 # Run filter with a given allowlist and command. $1=label, $2=expected
 # (allow|block), $3=allowlist file path (or non-existent path for missing-
 # file scenario), $4=plugin name to test, $5=optional override basename.
-# Tests the PLUGIN allowlist via `claude-write plugin-page <name> Foo.page`.
+# Tests the PLUGIN allowlist via `claude-write plugin-file <name> Foo.page`.
 run_case() {
     local label="$1" expected="$2" cfg_path="$3" plugin_name="$4" basename="${5:-Foo.page}"
-    local cmd="claude-write plugin-page $plugin_name $basename"
+    local cmd="claude-write plugin-file $plugin_name $basename"
     local out rc got
     out=$(CLAUDE_SSH_ALLOWLIST_FILE="$cfg_path" \
         SSH_ORIGINAL_COMMAND="$cmd" \

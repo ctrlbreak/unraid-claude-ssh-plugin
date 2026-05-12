@@ -84,15 +84,18 @@ effect immediately — no service restart.
 **Symptom:**
 
 ```
-$ cat foo.txt | ssh claude@nas 'claude-write plugin-page foo foo.txt'
-claude-write: REJECTED — extension 'txt' not allowed for plugin-page (need: page)
+$ cat program.exe | ssh claude@nas 'claude-write plugin-file foo program.exe'
+claude-write: REJECTED — extension 'exe' not allowed for plugin-file (need: page php cfg sh py js css html svg txt json)
 ```
 
-**Likely cause:** the basename's extension doesn't match the category's
+**Likely cause:** the basename's extension isn't in the category's
 whitelist.
 
 **Fix:** rename the file or use a category that accepts the extension. See
-the [categories reference](categories.md) for the full table.
+the [categories reference](categories.md) for the full table. Note: the
+only path that accepts an extensionless basename is `plugin-file` under
+`event/<hook>` (depth-1, lowercase). Everywhere else a file extension is
+required.
 
 ## Status tab: filter / writer version mismatch
 

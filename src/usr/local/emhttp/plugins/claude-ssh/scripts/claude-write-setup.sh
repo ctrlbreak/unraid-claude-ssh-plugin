@@ -37,7 +37,7 @@ set -euo pipefail
 # changes. Setup-script edits outside that heredoc don't bump this. Read by
 # exec.php (readVersionMarker), used by the install banner below, asserted by
 # tests/test-versions.sh.
-WRITER_VERSION="v5"
+WRITER_VERSION="v6"
 
 # Auto-detect plugin invocation (see unraid-readonly-ssh-setup.sh for rationale).
 SELF_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
@@ -107,10 +107,20 @@ cat > "$PRIV_PATH" << 'PRIV'
 # claude-write — privileged file writer for the read-only `claude` user.
 # =============================================================================
 # Usage:
-#   claude-write <category> <basename>      # content on stdin
+#   claude-write scratch        <basename>                 # content on stdin
+#   claude-write plugin-file    <plugin>    <rel-path>     # content on stdin
+#   claude-write appdata-script <container> <basename>     # content on stdin
+#
+# v6: plugin-{page,include,script,cfg} collapsed into a single `plugin-file`
+# category that accepts a rel-path under /usr/local/emhttp/plugins/<plugin>/.
+# Rel-path may be a basename or include up to two subdirectory components;
+# extension drives mode (.sh/.py → 755, else 644). Narrow exception:
+# `event/<hook>` (lowercase, ^[a-z][a-z0-9_]{0,32}$) accepts an extensionless
+# basename at mode 755 (Unraid event-hook convention).
 #
 # Categories map to fixed target directories with allowed extensions and modes.
-# Basename is strictly validated to prevent path traversal or hidden files.
+# Basename / rel-path are strictly validated to prevent path traversal or
+# hidden files.
 # Existing files are backed up to /mnt/cache/appdata/claude-write-backups/ first
 # (NOT /boot — flash wear-leveling concerns). Backups are rotated to last 10
 # per <category>__<basename>. Writes are atomic (tempfile + rename within
@@ -166,18 +176,22 @@ on_error() {
 }
 trap on_error ERR
 
-# --- Parse and validate args (v2: arity depends on category) ---
-# Simple: claude-write-priv <cat>             <basename>
-# Plugin: claude-write-priv <cat> <plugin>    <basename>
+# --- Parse and validate args (arity depends on category) ---
+# Simple:    claude-write-priv scratch        <basename>
+# Plugin:    claude-write-priv plugin-file    <plugin>    <rel-path>
+# Container: claude-write-priv appdata-script <container> <basename>
 CATEGORY="${1:-}"
 [ -n "$CATEGORY" ] || reject "missing category"
 
 # PLUGIN_NAME holds the second-arg value for any 3-arg category — either a
-# plugin name (plugin-* categories) or a container name (appdata-script).
-# Variable name kept for path-of-least-change; ALLOW_KIND records the
-# allowlist kind for the lookup and for the WROTE log field naming.
+# plugin name (plugin-file) or a container name (appdata-script).
+# ALLOW_KIND records the allowlist kind for the lookup and the WROTE log field.
+# REL_PATH carries the rel-path for plugin-file; SUBDIR_PATH is populated by
+# validation below ("", "sub", or "sub1/sub2").
 PLUGIN_NAME=""
 ALLOW_KIND=""
+REL_PATH=""
+SUBDIR_PATH=""
 case "$CATEGORY" in
     scratch)
         BASENAME="${2:-}"
@@ -185,13 +199,13 @@ case "$CATEGORY" in
         [ -n "$BASENAME" ] || reject "missing basename"
         [ -z "$EXTRA" ]    || reject "unexpected extra args"
         ;;
-    plugin-page|plugin-include|plugin-script|plugin-cfg)
+    plugin-file)
         ALLOW_KIND=plugin
         PLUGIN_NAME="${2:-}"
-        BASENAME="${3:-}"
+        REL_PATH="${3:-}"
         EXTRA="${4:-}"
         [ -n "$PLUGIN_NAME" ] || reject "missing plugin-name"
-        [ -n "$BASENAME" ]    || reject "missing basename"
+        [ -n "$REL_PATH" ]    || reject "missing rel-path"
         [ -z "$EXTRA" ]       || reject "unexpected extra args"
         ;;
     appdata-script)
@@ -219,13 +233,45 @@ if [ -n "$ALLOW_KIND" ]; then
     [ "$target_ok" -eq 1 ] || reject "${ALLOW_KIND}-name '$PLUGIN_NAME' not in allowlist"
 fi
 
-# Basename: alphanumerics, dot, underscore, hyphen only.
-# No leading dot (no hidden files). No path separators.
-case "$BASENAME" in
-    .*|*/*|*..*) reject "invalid basename '$BASENAME'" ;;
-esac
-if ! echo "$BASENAME" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$'; then
-    reject "basename must match [a-zA-Z0-9._-], 1-128 chars"
+# Basename / rel-path validation. plugin-file gets the rel-path branch
+# (max 3 components, per-component regex, no traversal); scratch and
+# appdata-script keep the original flat-basename rules.
+if [ "$CATEGORY" = "plugin-file" ]; then
+    # Layered: case-guard the dangerous literals first, then per-component regex.
+    case "$REL_PATH" in
+        ..|*..*|/*|*/|.*) reject "invalid rel-path '$REL_PATH'" ;;
+    esac
+    case "$REL_PATH" in
+        *//*|*/./*|*/.*) reject "invalid rel-path '$REL_PATH'" ;;
+    esac
+    [ "${#REL_PATH}" -le 128 ] || reject "rel-path too long (max 128)"
+    slash_count=$(echo "$REL_PATH" | tr -cd '/' | wc -c | tr -d ' ')
+    [ "$slash_count" -le 2 ] || reject "rel-path has too many components (max 3)"
+    # SUBDIR_PATH = dirname portion; BASENAME = leaf. We split on the LAST
+    # slash so a 3-component path produces SUBDIR_PATH="a/b", BASENAME="c".
+    case "$slash_count" in
+        0) SUBDIR_PATH=""; BASENAME="$REL_PATH" ;;
+        *) SUBDIR_PATH="${REL_PATH%/*}"; BASENAME="${REL_PATH##*/}" ;;
+    esac
+    # Validate each non-empty subdir component (max 2 because slash_count<=2).
+    if [ -n "$SUBDIR_PATH" ]; then
+        IFS='/' read -r _s1 _s2 <<< "$SUBDIR_PATH"
+        for _s in "$_s1" "$_s2"; do
+            [ -z "$_s" ] && continue
+            echo "$_s" | grep -qE '^[a-zA-Z0-9_][a-zA-Z0-9._-]*$' \
+                || reject "subdir component '$_s' invalid"
+        done
+    fi
+    echo "$BASENAME" | grep -qE '^[a-zA-Z0-9_][a-zA-Z0-9._-]*$' \
+        || reject "basename '$BASENAME' invalid"
+else
+    # scratch + appdata-script: original flat basename rules.
+    case "$BASENAME" in
+        .*|*/*|*..*) reject "invalid basename '$BASENAME'" ;;
+    esac
+    if ! echo "$BASENAME" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$'; then
+        reject "basename must match [a-zA-Z0-9._-], 1-128 chars"
+    fi
 fi
 
 # --- Category mapping ---
@@ -237,25 +283,14 @@ case "$CATEGORY" in
         ALLOWED_EXTS="sh"
         MODE=755
         ;;
-    plugin-script)
-        TARGET_DIR=/usr/local/emhttp/plugins/$PLUGIN_NAME/scripts
-        ALLOWED_EXTS="py sh"
-        MODE=755
-        ;;
-    plugin-page)
-        TARGET_DIR=/usr/local/emhttp/plugins/$PLUGIN_NAME
-        ALLOWED_EXTS="page"
-        MODE=644
-        ;;
-    plugin-include)
-        TARGET_DIR=/usr/local/emhttp/plugins/$PLUGIN_NAME/include
-        ALLOWED_EXTS="php sh"
-        MODE=644   # overridden to 755 below for .sh
-        ;;
-    plugin-cfg)
-        TARGET_DIR=/usr/local/emhttp/plugins/$PLUGIN_NAME
-        ALLOWED_EXTS="cfg"
-        MODE=644
+    plugin-file)
+        if [ -n "$SUBDIR_PATH" ]; then
+            TARGET_DIR=/usr/local/emhttp/plugins/$PLUGIN_NAME/$SUBDIR_PATH
+        else
+            TARGET_DIR=/usr/local/emhttp/plugins/$PLUGIN_NAME
+        fi
+        ALLOWED_EXTS="page php cfg sh py js css html svg txt json"
+        MODE=644   # extension check below promotes .sh/.py → 755, or sets event/<hook> mode
         ;;
     scratch)
         # Ephemeral /tmp namespace. No backups, broader extensions, .sh/.py 755.
@@ -267,22 +302,42 @@ esac
 
 # --- Extension check ---
 EXT="${BASENAME##*.}"
-if [ "$EXT" = "$BASENAME" ]; then
-    reject "basename must have extension"
-fi
-ext_ok=0
-for e in $ALLOWED_EXTS; do
-    if [ "$EXT" = "$e" ]; then ext_ok=1; break; fi
-done
-[ "$ext_ok" -eq 1 ] || reject "extension '$EXT' not allowed for $CATEGORY (need: $ALLOWED_EXTS)"
-
-# Promote .sh to 755 inside plugin-include
-if [ "$CATEGORY" = "plugin-include" ] && [ "$EXT" = "sh" ]; then
-    MODE=755
-fi
-# Promote .sh / .py to 755 in scratch
-if [ "$CATEGORY" = "scratch" ] && { [ "$EXT" = "sh" ] || [ "$EXT" = "py" ]; }; then
-    MODE=755
+if [ "$CATEGORY" = "plugin-file" ]; then
+    # Extensionless basenames are rejected EXCEPT under event/<hook>, which
+    # the writer maps to mode 755 — Unraid invokes these on system events
+    # and they're conventionally extensionless. Narrow: lowercase-only,
+    # depth-1 (event/<hook>), no nesting.
+    if [ "$EXT" = "$BASENAME" ]; then
+        if [ "$SUBDIR_PATH" = "event" ] \
+           && echo "$BASENAME" | grep -qE '^[a-z][a-z0-9_]{0,32}$'; then
+            MODE=755
+        else
+            reject "basename must have extension (only event/<hook> may be extensionless)"
+        fi
+    else
+        ext_ok=0
+        for e in $ALLOWED_EXTS; do
+            if [ "$EXT" = "$e" ]; then ext_ok=1; break; fi
+        done
+        [ "$ext_ok" -eq 1 ] || reject "extension '$EXT' not allowed for $CATEGORY (need: $ALLOWED_EXTS)"
+        if [ "$EXT" = "sh" ] || [ "$EXT" = "py" ]; then
+            MODE=755
+        fi
+    fi
+else
+    # scratch + appdata-script: extension required, no event/<hook> exception.
+    if [ "$EXT" = "$BASENAME" ]; then
+        reject "basename must have extension"
+    fi
+    ext_ok=0
+    for e in $ALLOWED_EXTS; do
+        if [ "$EXT" = "$e" ]; then ext_ok=1; break; fi
+    done
+    [ "$ext_ok" -eq 1 ] || reject "extension '$EXT' not allowed for $CATEGORY (need: $ALLOWED_EXTS)"
+    # Promote .sh / .py to 755 in scratch.
+    if [ "$CATEGORY" = "scratch" ] && { [ "$EXT" = "sh" ] || [ "$EXT" = "py" ]; }; then
+        MODE=755
+    fi
 fi
 
 DEST="$TARGET_DIR/$BASENAME"
@@ -317,7 +372,11 @@ TS=$(date +%Y%m%d-%H%M%S)
 BACKUP=""
 if [ "$CATEGORY" != "scratch" ] && [ -f "$DEST" ]; then
     mkdir -p "$BACKUP_DIR" 2>/dev/null || true
-    if [ -n "$PLUGIN_NAME" ]; then
+    if [ -n "$SUBDIR_PATH" ]; then
+        # Flatten / to __ so the backup filename stays a safe single segment.
+        SUBDIR_FLAT="${SUBDIR_PATH//\//__}"
+        BACKUP_KEY="${CATEGORY}__${PLUGIN_NAME}__${SUBDIR_FLAT}__${BASENAME}"
+    elif [ -n "$PLUGIN_NAME" ]; then
         BACKUP_KEY="${CATEGORY}__${PLUGIN_NAME}__${BASENAME}"
     else
         BACKUP_KEY="${CATEGORY}__${BASENAME}"
@@ -348,14 +407,17 @@ HASH=$(sha256sum "$DEST" | awk '{print $1}')
 SIZE=$(stat -c %s "$DEST")
 TARGET_FIELD=""
 [ -n "$PLUGIN_NAME" ] && TARGET_FIELD=" ${ALLOW_KIND}=$PLUGIN_NAME"
+REL_FIELD=""
+[ -n "$REL_PATH" ] && REL_FIELD=" rel=$REL_PATH"
 logger -t "$LOG_TAG" -p auth.notice \
-    "WROTE category=$CATEGORY${TARGET_FIELD} dest=$DEST size=$SIZE sha256=$HASH backup=${BACKUP:-none}" \
+    "WROTE category=$CATEGORY${TARGET_FIELD}${REL_FIELD} dest=$DEST size=$SIZE sha256=$HASH backup=${BACKUP:-none}" \
     2>/dev/null || true
 
 # --- Confirmation to caller ---
 echo "claude-write: OK"
 echo "  category: $CATEGORY"
-[ -n "$PLUGIN_NAME" ] && echo "  plugin:   $PLUGIN_NAME"
+[ -n "$PLUGIN_NAME" ] && echo "  ${ALLOW_KIND}:   $PLUGIN_NAME"
+[ -n "$REL_PATH" ]    && echo "  rel-path: $REL_PATH"
 echo "  dest:     $DEST"
 echo "  size:     $SIZE bytes"
 echo "  mode:     $MODE"
@@ -374,13 +436,16 @@ TMP_SUDO=$(mktemp)
 cat > "$TMP_SUDO" << SUDO
 # Allow the read-only \`$USERNAME\` user to invoke claude-write for specific
 # categories only. Each pattern matches the exact argv shape — sudo's wildcard
-# \`*\` matches one whole argument, blocking extra-args injection. The privileged
-# script re-validates everything as defence in depth.
+# \`*\` matches one whole argument (and does NOT match \`/\`), blocking
+# extra-args injection. The privileged script re-validates everything as
+# defence in depth.
 #
-# v9: plugin-* and appdata-script take a 2nd-arg target (* *). The simple
-# scratch category keeps its 2-arg shape. (hook-sonarr/hook-radarr removed in
-# v9 — replaced by appdata-script <container>.)
-$USERNAME ALL=(root) NOPASSWD: /usr/local/sbin/claude-write-priv scratch *, /usr/local/sbin/claude-write-priv plugin-script * *, /usr/local/sbin/claude-write-priv plugin-page * *, /usr/local/sbin/claude-write-priv plugin-include * *, /usr/local/sbin/claude-write-priv plugin-cfg * *, /usr/local/sbin/claude-write-priv appdata-script * *
+# v6: plugin-{page,include,script,cfg} collapsed into plugin-file
+# <plugin> <rel-path>. Because sudo's \`*\` does not match \`/\`, the
+# rel-path's three arities (basename, subdir/basename, subdir/subdir/basename)
+# must each be enumerated explicitly. The writer also caps the depth at 3
+# components, so a 4-slash pattern would be unreachable by construction.
+$USERNAME ALL=(root) NOPASSWD: /usr/local/sbin/claude-write-priv scratch *, /usr/local/sbin/claude-write-priv plugin-file * *, /usr/local/sbin/claude-write-priv plugin-file * */*, /usr/local/sbin/claude-write-priv plugin-file * */*/*, /usr/local/sbin/claude-write-priv appdata-script * *
 SUDO
 
 # Validate before installing
@@ -450,7 +515,7 @@ echo "  claude-write deploy channel installed."
 echo "    Writer:     $PRIV_PATH $WRITER_VERSION (re-validates every write)"
 echo "    Allowlist:  /mnt/user/appdata/claude-ssh/allowlist.cfg (default-deny; edit to enable)"
 echo "    Audit:      grep claude-write /var/log/syslog"
-echo "    Categories: scratch | plugin-{page,include,script,cfg} | appdata-script"
+echo "    Categories: scratch | plugin-file | appdata-script"
 echo ""
 echo "  Quick smoke (run from a workstation, after allowlist + SSH key are set):"
 echo "    cat my-hook.sh | ssh $USERNAME@\$(hostname) \\"

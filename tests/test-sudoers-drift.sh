@@ -125,10 +125,13 @@ assert_eq "filter == sudoers" "$FILTER_CATS" "$SUDOERS_CATS"
 assert_eq "filter == exec.php" "$FILTER_CATS" "$PHP_CATS"
 
 # --- 6. Argv shape in sudoers ----------------------------------------------
-# Simple categories take 2 args: `<cat> *`. Plugin/container take 3:
-# `<cat> * *`. The sudoers principal must use the right shape per category.
-# We grep for `claude-write-priv <cat> * *` (3-arg) vs `... <cat> *,` or
-# end-of-line for 2-arg.
+# Simple categories take 2 args: `<cat> *`. Container takes 3: `<cat> * *`.
+# plugin-file (v11+) takes 3-args with a rel-path that may contain 0, 1, or 2
+# slashes — and sudo's `*` does not match `/`, so each rel-path arity must be
+# enumerated as its own pattern. The writer caps rel-path depth at 3
+# components; the test asserts the three required arities AND the absence of
+# any 4-slash pattern (so future-proofing edits can't quietly raise the cap
+# at the sudoers layer past what the writer enforces).
 check_argv_shape() {
     local cat="$1" expected_shape="$2" line="$3" found_shape
     if echo "$line" | grep -qE "/usr/local/sbin/claude-write-priv $cat \* \*([,]|$)"; then
@@ -142,7 +145,24 @@ check_argv_shape() {
 }
 
 for cat in $F_SIMPLE; do check_argv_shape "$cat" 2 "$SUDO_LINE"; done
-for cat in $F_PLUGIN $F_CONTAINER; do check_argv_shape "$cat" 3 "$SUDO_LINE"; done
+for cat in $F_CONTAINER; do check_argv_shape "$cat" 3 "$SUDO_LINE"; done
+
+# plugin-file: assert all three rel-path arities are present.
+for shape in 'plugin-file \* \*' 'plugin-file \* \*/\*' 'plugin-file \* \*/\*/\*'; do
+    if echo "$SUDO_LINE" | grep -qE "claude-write-priv $shape([,]| |$)"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+        FAILED+=("sudoers missing plugin-file arity: $shape")
+    fi
+done
+# Negative: no 4-slash pattern (writer's depth cap is 3 components).
+if echo "$SUDO_LINE" | grep -qE 'plugin-file \* \*/\*/\*/\*'; then
+    FAIL=$((FAIL + 1))
+    FAILED+=("sudoers has 4-slash plugin-file pattern — writer caps at 3 components")
+else
+    PASS=$((PASS + 1))
+fi
 
 TOTAL=$((PASS + FAIL))
 echo "  cases: $PASS passed / $FAIL failed / $TOTAL total"

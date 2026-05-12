@@ -85,11 +85,16 @@ page once installed, and in [`CHANGELOG.md`](CHANGELOG.md).
 ### Plugin (3-arg, gated by plugin allowlist)
 
 ```
-claude-write plugin-page    <plugin-name> <basename>   → /usr/local/emhttp/plugins/<plugin>/
-claude-write plugin-include <plugin-name> <basename>   → /usr/local/emhttp/plugins/<plugin>/include/
-claude-write plugin-script  <plugin-name> <basename>   → /usr/local/emhttp/plugins/<plugin>/scripts/
-claude-write plugin-cfg     <plugin-name> <basename>   → /usr/local/emhttp/plugins/<plugin>/
+claude-write plugin-file <plugin-name> <rel-path>   → /usr/local/emhttp/plugins/<plugin>/<rel-path>
 ```
+
+`<rel-path>` may be a basename or include up to two subdirectories
+(`scripts/foo.sh`, `javascript/lib/foo.js`, `event/started`). Extension drives
+mode: `.sh` / `.py` are 755, everything else (`.page .php .cfg .js .css
+.html .svg .txt .json`) is 644. The Unraid event-hook convention is
+honoured: an extensionless basename matching `^[a-z][a-z0-9_]{0,32}$` is
+accepted under `event/` (mode 755). See [`docs/categories.md`](docs/categories.md)
+for the full rel-path / extension / mode reference.
 
 ### Container (3-arg, gated by container allowlist)
 

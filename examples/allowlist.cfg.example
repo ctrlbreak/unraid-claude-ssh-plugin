@@ -16,9 +16,8 @@
 # every invocation; default-deny when empty or malformed.
 #
 # Format:
-#   plugin <name>      Allow claude-write plugin-page/plugin-include/
-#                      plugin-script/plugin-cfg writes for /usr/local/emhttp/
-#                      plugins/<name>/.
+#   plugin <name>      Allow claude-write plugin-file writes for
+#                      /usr/local/emhttp/plugins/<name>/<rel-path>.
 #   container <name>   Allow claude-write appdata-script writes for
 #                      /mnt/user/appdata/<name>/scripts/.
 #
