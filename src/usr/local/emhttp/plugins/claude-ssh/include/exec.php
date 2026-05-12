@@ -138,7 +138,7 @@ case 'save_allowlist':
     break;
 
 case 'dashboard':
-    echo json_encode(buildDashboard($scriptsDir, $paths, $cs_user));
+    echo json_encode(buildDashboard($scriptsDir, $paths, $cs_user, $pluginPlg));
     break;
 
 default:
@@ -376,8 +376,11 @@ function buildAuditLog($dateFilter, $tagFilter, $maxLines) {
     ];
 }
 
-function buildDashboard($scriptsDir, $paths, $username = 'claude') {
+function buildDashboard($scriptsDir, $paths, $username = 'claude', $pluginPlg = null) {
     $filterVer = readVersionMarker("$scriptsDir/unraid-readonly-ssh-setup.sh", 'FILTER_VERSION');
+    $writerVer = readVersionMarker("$scriptsDir/claude-write-setup.sh",       'WRITER_VERSION');
+    $pluginVer = $pluginPlg !== null ? pluginVersion($pluginPlg) : null;
+
     $userExists = false;
     $passwd = @file_get_contents('/etc/passwd');
     if ($passwd !== false) $userExists = (bool)preg_match('/^' . preg_quote($username, '/') . ':/m', $passwd);
@@ -391,12 +394,18 @@ function buildDashboard($scriptsDir, $paths, $username = 'claude') {
             $sudoersPresent = true;
         }
     }
+    $sshKeys = sshKeyCount($paths['authorized_keys']);
 
     $healthy = $userExists && $filterPresent && $writerPresent && $sudoersPresent;
 
-    // 24h activity for the tile (cheaper subset of recent_activity).
-    $writes = 0;
-    $blocked = 0;
+    // 24h activity for the tile: one syslog pass, four counters. Mirrors the
+    // shape buildRecentActivity() uses (and its line-classification rules) so
+    // the tile and the Settings page can't disagree on what an "accepted" or
+    // "rejected" line is.
+    $accepted = 0;
+    $blocked  = 0;
+    $writes   = 0;
+    $rejected = 0;
     $cutoff = time() - 86400;
     $cmd = "grep -E 'claude-(shell|write)' /var/log/syslog 2>/dev/null | tail -n 50000";
     $output = @shell_exec($cmd);
@@ -405,14 +414,26 @@ function buildDashboard($scriptsDir, $paths, $username = 'claude') {
             if ($line === '') continue;
             $ts = parseSyslogTime($line);
             if ($ts !== null && $ts < $cutoff) continue;
-            if (strpos($line, 'claude-shell') !== false && strpos($line, 'BLOCKED') !== false) {
-                $blocked++;
-            }
-            if (strpos($line, 'claude-write') !== false && strpos($line, 'WROTE') !== false) {
-                $writes++;
+            if (strpos($line, 'claude-shell') !== false) {
+                if (strpos($line, 'BLOCKED') !== false) {
+                    $blocked++;
+                } elseif (strpos($line, 'RECV:') !== false) {
+                    $accepted++;
+                }
+            } elseif (strpos($line, 'claude-write') !== false) {
+                if (strpos($line, 'WROTE') !== false) {
+                    $writes++;
+                } elseif (strpos($line, 'REJECTED') !== false) {
+                    $rejected++;
+                }
             }
         }
     }
+
+    // Allowlist counts: reuse the Settings-page loader so the tile can't drift
+    // from what the editor shows. Invalid entries don't count (Settings UI
+    // surfaces them separately).
+    $allowlist = load_allowlist_file();
 
     $color = 'green';
     if (!$healthy) $color = 'red';
@@ -420,10 +441,28 @@ function buildDashboard($scriptsDir, $paths, $username = 'claude') {
 
     return [
         'healthy'        => $healthy,
-        'filter_version' => $filterVer,
-        'writes_24h'     => $writes,
-        'blocked_24h'    => $blocked,
         'color'          => $color,
+        'username'       => $username,
+        'plugin_version' => $pluginVer,
+        'filter_version' => $filterVer,
+        'writer_version' => $writerVer,
+        'health' => [
+            'user_exists'       => $userExists,
+            'filter_installed'  => $filterPresent,
+            'writer_installed'  => $writerPresent,
+            'sudoers_installed' => $sudoersPresent,
+            'ssh_key_count'     => $sshKeys,
+        ],
+        'activity_24h' => [
+            'accepted' => $accepted,
+            'blocked'  => $blocked,
+            'writes'   => $writes,
+            'rejected' => $rejected,
+        ],
+        'allowlist' => [
+            'plugins'    => count($allowlist['plugins']),
+            'containers' => count($allowlist['containers']),
+        ],
     ];
 }
 

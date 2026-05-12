@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.12e">
+  <!ENTITY version   "2026.05.13a">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,24 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.13a
+- **Dashboard tile redesign.** Adopts the Unraid 7.x `$mytiles[column1]` API
+  so the tile now sits inside the dashboard's column grid (half-width like
+  every other tile) instead of rendering as a full-width banner above the
+  columns. Gated on Unraid 6.12+ via the `Cond=` page header; older versions
+  silently skip the tile.
+- **Richer tile content.** Shows installation health (user, filter, writer,
+  sudoers, SSH-key count) as inline tick/cross badges, 24h activity broken
+  out into accepted / blocked / writes / rejected, and the allowlist size
+  (plugins + containers). Status verdict pill (Healthy / activity blocked /
+  Not installed) sits in the tile-header subtitle.
+- **Backend** `dashboard` action returns one richer JSON blob per 60s poll —
+  same single AJAX call, no extra backend load. Allowlist counts derive from
+  the same `load_allowlist_file()` the Settings UI uses, so the tile and
+  editor can never disagree.
+- **New** `tests/test-dashboard-action.sh` pins the JSON shape (19 cases).
+- No filter/writer version bump — runtime artifacts unchanged.
+
 ###2026.05.12e
 - **Simplified install banners.** The SSH-setup script's "Setup complete!"
   block dropped from ~30 lines to ~10 (14 lines of filter-rule detail moved

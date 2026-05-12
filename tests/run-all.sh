@@ -16,6 +16,7 @@ TESTS=(
     test-allowlist-config.sh
     test-boot-config-write-block.sh
     test-settings-save.sh
+    test-dashboard-action.sh
     test-username-configurable.sh
     test-idempotency.sh
     test-migration.sh

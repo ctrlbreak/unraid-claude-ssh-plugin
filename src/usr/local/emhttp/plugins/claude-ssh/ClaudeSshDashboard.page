@@ -1,54 +1,194 @@
-Menu="Dashboard"
+Cond="version_compare(parse_ini_file('/etc/unraid-version')['version'],'6.11.9','>')"
+Menu="Dashboard:0"
 Icon="key"
 ---
 <?php
 $plugin = 'claude-ssh';
+
+$mytiles[$plugin]['column1'] = <<<EOT
+<tbody title="Claude SSH">
+  <tr>
+    <td>
+      <div class='tile-header' id='claude-ssh-dashboard-card'>
+        <div class='tile-header-left'>
+          <i class='fa fa-key f32'></i>
+          <div class='section'>
+            <h3 class='tile-header-main' id='claude-ssh-dashboard-title'>Claude SSH</h3>
+            <span>
+              <span class="cs-tile-dot cs-tile-grey" id="cs-tile-dot">&#9679;</span>
+              <span id="cs-tile-verdict">loading&hellip;</span>
+              <span class="cs-tile-sep">&middot;</span>
+              <span id="cs-tile-plugin-ver">&mdash;</span>
+            </span>
+          </div>
+        </div>
+        <div class='tile-header-right'>
+          <div class='tile-header-right-controls'>
+            <a id="claude-ssh-settings-button" href="/Utilities/ClaudeSsh" title="Claude SSH settings"><i class="fa fa-fw fa-cog control"></i></a>
+          </div>
+        </div>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="cs-tile-section">
+        <div class="cs-tile-shead">Health</div>
+        <div class="cs-tile-badges">
+          <span class="cs-tile-badge" id="cs-tile-b-user"><i class="fa cs-tile-tick"></i> user (<span id="cs-tile-user">&mdash;</span>)</span>
+          <span class="cs-tile-badge" id="cs-tile-b-filter"><i class="fa cs-tile-tick"></i> filter <span id="cs-tile-filter-ver">&mdash;</span></span>
+          <span class="cs-tile-badge" id="cs-tile-b-writer"><i class="fa cs-tile-tick"></i> writer <span id="cs-tile-writer-ver">&mdash;</span></span>
+          <span class="cs-tile-badge" id="cs-tile-b-sudoers"><i class="fa cs-tile-tick"></i> sudoers</span>
+          <span class="cs-tile-badge" id="cs-tile-b-keys"><i class="fa cs-tile-tick"></i> <span id="cs-tile-keys">&mdash;</span> <span id="cs-tile-keys-label">SSH keys</span></span>
+        </div>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="cs-tile-section">
+        <div class="cs-tile-shead">Activity (24h)</div>
+        <div class="cs-tile-kpis">
+          <span><b id="cs-tile-accepted">&ndash;</b> accepted</span>
+          <span><b id="cs-tile-blocked">&ndash;</b> blocked</span>
+          <span><b id="cs-tile-writes">&ndash;</b> writes</span>
+          <span><b id="cs-tile-rejected">&ndash;</b> rejected</span>
+        </div>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="cs-tile-section">
+        <div class="cs-tile-shead">Allowlist</div>
+        <div class="cs-tile-allow"><b id="cs-tile-allow-plugins">&ndash;</b> plugins &middot; <b id="cs-tile-allow-containers">&ndash;</b> containers</div>
+      </div>
+    </td>
+  </tr>
+</tbody>
+EOT;
+
+// Pre-7.2 compat: older Unraid dashboards stacked title/cog vertically inside
+// .tile-header — patch the DOM at runtime so the same markup renders sensibly
+// on both. Lifted from dkaser/unraid-plugin-template's MyPlugin-Dashboard.page.
+$isResponsiveWebgui = version_compare(parse_ini_file('/etc/unraid-version')['version'] ?? '', '7.2', '>=');
+if (!$isResponsiveWebgui) {
+    $mytiles[$plugin]['column1'] .= <<<EOT
+<script>
+\$(function() {
+    \$('#claude-ssh-dashboard-title').replaceWith(function() {
+        return \$(this).text() + "<br>";
+    });
+    \$('#claude-ssh-settings-button').prependTo('#claude-ssh-dashboard-card');
+});
+</script>
+EOT;
+}
 ?>
 
 <style>
-.cs-tile-content { padding: 8px 0; text-align: center; }
-.cs-tile-line { font-size: 1.0em; font-weight: bold; }
-.cs-tile-sub  { font-size: 0.85em; color: var(--text-secondary, #888); margin-top: 4px; }
-.cs-tile-green  { color: #27ae60; }
-.cs-tile-amber  { color: #f39c12; }
-.cs-tile-red    { color: #e74c3c; }
+.cs-tile-section { padding: 6px 4px; }
+.cs-tile-shead {
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary, #888);
+  margin-bottom: 4px;
+}
+.cs-tile-dot { font-size: 0.9em; margin-right: 2px; }
+.cs-tile-sep { margin: 0 6px; color: var(--text-secondary, #888); }
+.cs-tile-green { color: #27ae60; }
+.cs-tile-amber { color: #f39c12; }
+.cs-tile-red   { color: #e74c3c; }
+.cs-tile-grey  { color: #95a5a6; }
+
+.cs-tile-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 0.92em;
+}
+.cs-tile-badge { white-space: nowrap; }
+.cs-tile-tick {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  margin-right: 2px;
+}
+.cs-tile-badge.cs-ok .cs-tile-tick:before  { content: "\f00c"; color: #27ae60; }
+.cs-tile-badge.cs-bad .cs-tile-tick:before { content: "\f00d"; color: #e74c3c; }
+
+.cs-tile-kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 16px;
+  font-size: 0.95em;
+}
+.cs-tile-kpis b { font-size: 1.05em; }
+
+.cs-tile-allow { font-size: 0.95em; }
 </style>
-
-<div class="tile-header">
-  <a href="/Utilities/ClaudeSsh" title="Claude SSH plugin status">
-    <i class="fa fa-key"></i>
-    <span>Claude SSH</span>
-    <i class="fa fa-cog"></i>
-  </a>
-</div>
-
-<div class="cs-tile-content" id="cs-tile-content">
-  <div class="cs-tile-line">…</div>
-  <div class="cs-tile-sub">loading</div>
-</div>
 
 <script>
 (function() {
-  var plugin = '<?=$plugin?>';
+  var pluginName = 'claude-ssh';
+
+  function setText(id, text) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+  function setBadge(id, ok) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('cs-ok', 'cs-bad');
+    el.classList.add(ok ? 'cs-ok' : 'cs-bad');
+  }
+  function setDot(color) {
+    var el = document.getElementById('cs-tile-dot');
+    if (!el) return;
+    el.classList.remove('cs-tile-green', 'cs-tile-amber', 'cs-tile-red', 'cs-tile-grey');
+    el.classList.add('cs-tile-' + (color || 'grey'));
+  }
 
   function load() {
-    $.post('/plugins/' + plugin + '/include/exec.php', { action: 'dashboard' }, function(data) {
-      var color = 'cs-tile-' + (data.color || 'grey');
-      var line, sub;
-      if (!data.healthy) {
-        line = 'Not installed';
-        sub = 'open the plugin page to investigate';
-      } else {
-        line = 'Filter ' + (data.filter_version || '?');
-        sub = (data.writes_24h || 0) + ' writes · ' + (data.blocked_24h || 0) + ' blocked (24h)';
-      }
-      var el = document.getElementById('cs-tile-content');
-      el.innerHTML = '<div class="cs-tile-line ' + color + '">' + line + '</div>'
-                   + '<div class="cs-tile-sub">' + sub + '</div>';
+    $.post('/plugins/' + pluginName + '/include/exec.php', { action: 'dashboard' }, function(data) {
+      if (!data) return;
+
+      setDot(data.color);
+      var verdict = data.healthy
+        ? (data.color === 'amber' ? 'Healthy · activity blocked' : 'Healthy')
+        : 'Not installed';
+      setText('cs-tile-verdict', verdict);
+      setText('cs-tile-plugin-ver', data.plugin_version ? 'Plugin ' + data.plugin_version : '');
+
+      var h = data.health || {};
+      setText('cs-tile-user',         data.username || '?');
+      setText('cs-tile-filter-ver',   data.filter_version || '?');
+      setText('cs-tile-writer-ver',   data.writer_version || '?');
+      var keys = (h.ssh_key_count != null ? h.ssh_key_count : 0);
+      setText('cs-tile-keys',         keys);
+      setText('cs-tile-keys-label',   keys === 1 ? 'SSH key' : 'SSH keys');
+      setBadge('cs-tile-b-user',    !!h.user_exists);
+      setBadge('cs-tile-b-filter',  !!h.filter_installed);
+      setBadge('cs-tile-b-writer',  !!h.writer_installed);
+      setBadge('cs-tile-b-sudoers', !!h.sudoers_installed);
+      setBadge('cs-tile-b-keys',    keys > 0);
+
+      var a = data.activity_24h || {};
+      setText('cs-tile-accepted', (a.accepted != null ? a.accepted : 0));
+      setText('cs-tile-blocked',  (a.blocked  != null ? a.blocked  : 0));
+      setText('cs-tile-writes',   (a.writes   != null ? a.writes   : 0));
+      setText('cs-tile-rejected', (a.rejected != null ? a.rejected : 0));
+
+      var al = data.allowlist || {};
+      setText('cs-tile-allow-plugins',    (al.plugins    != null ? al.plugins    : 0));
+      setText('cs-tile-allow-containers', (al.containers != null ? al.containers : 0));
     }, 'json');
   }
 
-  load();
-  setInterval(load, 60000);
+  $(function() {
+    load();
+    setInterval(load, 60000);
+  });
 })();
 </script>

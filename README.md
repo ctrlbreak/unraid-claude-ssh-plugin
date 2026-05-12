@@ -21,8 +21,9 @@ Two layers of validation everywhere: an SSH-layer `command=` filter
 rejects unknown commands at login (advisory, fast); a privileged writer
 re-validates every write as enforcement. A Settings/Status tab in the
 Unraid web UI surfaces the filter version, recent activity, the
-configured allowlist (editable in-browser), and the live audit log —
-no shell needed once the plugin is installed.
+configured allowlist (editable in-browser), and the live audit log;
+a Dashboard tile mirrors install health, 24h activity, and allowlist
+size at a glance. No shell needed once the plugin is installed.
 
 ## What it does
 
