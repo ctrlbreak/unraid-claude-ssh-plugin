@@ -1,8 +1,6 @@
 # CLAUDE.md
 
-> **INVESTIGATION RULE**: When asked to debug or investigate something unexpected, present a plan BEFORE making code changes. Don't jump straight into editing files unless explicitly told to.
-
-> **DOC-SYNC RULE**: When you change anything user-visible (a new test, renamed/moved file, new category, deploy command, path) check whether the README, `.plg` CHANGES, or other in-repo docs reference what changed and update them in the same commit. Don't create new docs unless asked.
+> **DOC-SYNC scope (this repo):** the in-repo docs that may reference user-visible changes are the README and the `<CHANGES>` block in `claude-ssh.plg`. Check both on each user-visible change.
 
 > **SAFETY RULE — NO LIVE DEPLOYS WITHOUT EXPLICIT REQUEST**: This plugin is NOT yet running on a real Unraid box. Phase 5/6 changes are unit-tested but not live. Don't run `NAS_HOST=... bash deploy.sh` or any NAS-write command unless the user explicitly asks. The frozen production deployment lives in a sibling repo (see "Cross-repo context" below) and is the user's only working install today.
 
@@ -51,7 +49,7 @@ The conventions below are load-bearing across phases 3-6 and should continue int
 
 ### One phase = one commit
 
-Commit message: `Phase N: <subject>` followed by a paragraph explaining **what + why** (not how). Example: `fbce66c Phase 6: configurable SSH username`. No Claude attribution in commit messages, ever.
+Commit message: `Phase N: <subject>` followed by a paragraph explaining **what + why** (not how). Example: `fbce66c Phase 6: configurable SSH username`.
 
 ### Plugin version cadence
 
@@ -183,8 +181,6 @@ ROOT_HOST=root@bigboi CLAUDE_HOST=claude@bigboi \
 ## Commit message style
 
 - Subject line: `Phase N: <subject>` for phase commits, otherwise imperative verb (`Fix ...`, `Add ...`, `Refactor ...`).
-- Body explains **what + why**, not how. The diff shows how.
-- No Claude attribution. No `Co-Authored-By: Claude ...` lines.
 - Prefer one commit per phase. Don't split a phase across multiple commits unless the user asks.
 - HEREDOC syntax for the body so formatting survives:
 
