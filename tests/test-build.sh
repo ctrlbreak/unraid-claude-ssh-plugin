@@ -27,6 +27,7 @@ EXPECTED=(
     "usr/local/emhttp/plugins/claude-ssh/scripts/uninstall-runtime.sh"
     "usr/local/emhttp/plugins/claude-ssh/scripts/unraid-readonly-ssh-setup.sh"
     "usr/local/emhttp/plugins/claude-ssh/scripts/claude-write-setup.sh"
+    "usr/local/emhttp/plugins/claude-ssh/LICENSE"
 )
 
 LISTING=$(tar -tJf "$PKG" 2>/dev/null)

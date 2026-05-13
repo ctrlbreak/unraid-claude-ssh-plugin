@@ -8,6 +8,19 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.13c — 2026-05-13
+
+- **MIT LICENSE shipped in the package.** The repo gained an MIT LICENSE
+  at the previous release boundary; this release stages it into the
+  plugin tree at build time so installed copies carry the license at
+  `/usr/local/emhttp/plugins/claude-ssh/LICENSE`. Makefile copies the
+  repo-root `LICENSE` into the plugin tree just before tarring and
+  cleans up after; `.gitignore` covers the staged copy. `tests/test-
+  build.sh` asserts the file is in the `.txz`.
+- No filter/writer version bump — runtime artifacts (the heredoc'd
+  filter and writer) are byte-identical with `2026.05.13b` (filter v11,
+  writer v6).
+
 ## 2026.05.13b — 2026-05-13
 
 - **Collapse `plugin-{page,include,script,cfg}` into a single

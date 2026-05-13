@@ -1,2 +1,5 @@
 claude-ssh.txz
 .DS_Store
+# Makefile stages LICENSE into the plugin tree during build, then cleans up.
+# If the build is interrupted the staged copy may be left behind — ignore it.
+src/usr/local/emhttp/plugins/claude-ssh/LICENSE
