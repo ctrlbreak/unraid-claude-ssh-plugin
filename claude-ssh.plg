@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.13e">
+  <!ENTITY version   "2026.05.13f">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,17 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.13f
+- **Restore plugin name on the Plugins page.** The README shipped in
+  `2026.05.13e` was a single paragraph; Unraid's `ShowPlugins.php`
+  uses it verbatim and drops the `**&lt;name&gt;**` fallback when a README
+  exists. Result: every other plugin on the page showed
+  bold-name-then-description, but `claude-ssh` showed just the
+  description. Fix: prepend `**Claude SSH**` as its own line so the
+  rendered Markdown carries both the title and the blurb.
+- No filter/writer version bump — runtime artifacts unchanged from
+  `2026.05.13b/c/d/e` (filter v11, writer v6).
+
 ###2026.05.13e
 - **Plugin icon: black on transparent.** The icon shipped in `2026.05.13d`
   rendered onto an opaque white canvas (qlmanage thumbnailer behaviour),

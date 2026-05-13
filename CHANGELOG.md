@@ -8,6 +8,23 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.13f — 2026-05-13
+
+- **Restore plugin name on the Plugins page.** The in-tree
+  `README.md` shipped in `2026.05.13e` was a single description
+  paragraph. Unraid's `dynamix.plugin.manager/include/ShowPlugins.php`
+  uses the rendered README verbatim and only falls back to a
+  `**<name>**` bold-name line when the file is absent — so adding our
+  description silently swallowed the title. Every other plugin on the
+  page showed bold-name-then-description; ours showed just the
+  description.
+- Fix: prepend `**Claude SSH**` as its own line in the README so the
+  rendered Markdown carries the title AND the blurb (matching the
+  Appdata Backup / CA / Dynamix style).
+- No filter/writer version bump — runtime artifacts (the heredoc'd
+  filter and writer) are byte-identical with `2026.05.13b/c/d/e`
+  (filter v11, writer v6).
+
 ## 2026.05.13e — 2026-05-13
 
 - **Plugin icon: black on transparent.** The icon shipped in
