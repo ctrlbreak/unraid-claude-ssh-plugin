@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.13d">
+  <!ENTITY version   "2026.05.13e">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,25 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.05.13e
+- **Plugin icon: black on transparent.** The icon shipped in `2026.05.13d`
+  rendered onto an opaque white canvas (qlmanage thumbnailer behaviour),
+  producing a green key inside a visible white box on the Plugins page —
+  out of step with the Dashboard tile, which renders FontAwesome
+  `fa-key` in the page's text colour. This release re-renders the same
+  FontAwesome `fa-key` glyph in pure black and post-processes the PNG
+  alpha so the background is genuinely transparent. The Plugins page
+  now shows a black key flush against the row background, matching the
+  Settings tab and Dashboard tile.
+- **Plugins-page description.** Ships a short `README.md` at
+  `/usr/local/emhttp/plugins/claude-ssh/README.md` so the Unraid plugin
+  manager renders a description line under the plugin name (matching
+  how Community Applications and Dynamix plugins show their summaries).
+  Unraid's `ShowPlugins.php` reads this file as Markdown; without it,
+  the page falls back to just the bold plugin name.
+- No filter/writer version bump — runtime artifacts unchanged from
+  `2026.05.13b/c/d` (filter v11, writer v6).
+
 ###2026.05.13d
 - **Plugin icon on the Plugins page.** Ships a 128x128 PNG at
   `/usr/local/emhttp/plugins/claude-ssh/claude-ssh.png` so the Unraid

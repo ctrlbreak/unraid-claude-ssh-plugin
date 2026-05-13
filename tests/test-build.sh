@@ -29,6 +29,7 @@ EXPECTED=(
     "usr/local/emhttp/plugins/claude-ssh/scripts/claude-write-setup.sh"
     "usr/local/emhttp/plugins/claude-ssh/LICENSE"
     "usr/local/emhttp/plugins/claude-ssh/claude-ssh.png"
+    "usr/local/emhttp/plugins/claude-ssh/README.md"
 )
 
 LISTING=$(tar -tJf "$PKG" 2>/dev/null)

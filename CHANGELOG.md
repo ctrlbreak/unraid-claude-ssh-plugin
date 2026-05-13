@@ -8,6 +8,37 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.13e — 2026-05-13
+
+- **Plugin icon: black on transparent.** The icon shipped in
+  `2026.05.13d` rendered onto an opaque white canvas (qlmanage
+  thumbnailer rendered the SVG with `(R,G,B,A)=(255,255,255,255)` for
+  empty regions instead of `(0,0,0,0)` transparency), producing a green
+  key inside a visible white box on the Plugins page. The Dashboard
+  tile, by contrast, renders FontAwesome `fa-key` in the page's text
+  colour against the tile background — no visible bounding box. This
+  release re-renders the FontAwesome `fa-key` glyph in pure black and
+  post-processes the PNG alpha so the background is genuinely
+  transparent (`A=0` everywhere outside the key; anti-aliased edges
+  retain proportional alpha). The Plugins page now shows a black key
+  flush against the row background, matching the Settings tab and
+  Dashboard tile.
+- **Plugins-page description.** Ships a short `README.md` at
+  `/usr/local/emhttp/plugins/claude-ssh/README.md` so the Unraid
+  plugin manager renders a description line under the plugin name
+  (the way Community Applications, Dynamix, and Unraid Connect entries
+  carry summaries on the Plugins page). The mechanism is built into
+  Unraid core: `dynamix.plugin.manager/include/ShowPlugins.php` reads
+  `plugins/<name>/README.md` as Markdown and falls back to just the
+  bold plugin name when absent. Text mirrors the GitHub repo
+  description so all three surfaces (GitHub About, Plugins page,
+  README intro) stay aligned.
+- `test-build.sh` asserts both the icon PNG and the in-tree
+  `README.md` are in the `.txz`.
+- No filter/writer version bump — runtime artifacts (the heredoc'd
+  filter and writer) are byte-identical with `2026.05.13b/c/d` (filter
+  v11, writer v6).
+
 ## 2026.05.13d — 2026-05-13
 
 - **Plugin icon on the Plugins page.** Ships a 128x128 PNG at
