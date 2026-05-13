@@ -8,6 +8,25 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.13d — 2026-05-13
+
+- **Plugin icon on the Plugins page.** Ships a 128x128 PNG at
+  `/usr/local/emhttp/plugins/claude-ssh/claude-ssh.png` so the Unraid
+  plugin manager shows a key icon instead of the default green puzzle.
+  Visually matches the FontAwesome `fa-key` icon the Settings tab and
+  Dashboard tile already use (via `Icon="key"` in the `.page` headers).
+  The Plugins page uses a different convention from `.page` files —
+  it loads a PNG from disk at `<plugin>.png` matching the plugin name,
+  not a FontAwesome reference.
+- **Icon attribution.** Derived from FontAwesome Free 5's `fa-key` glyph
+  ([CC BY 4.0](https://fontawesome.com/license/free)), rasterized to
+  PNG and recoloured to match Unraid's healthy-state green. Attribution
+  added to README's License section.
+- `test-build.sh` asserts the icon is in the `.txz`.
+- No filter/writer version bump — runtime artifacts (the heredoc'd
+  filter and writer) are byte-identical with `2026.05.13b/c` (filter
+  v11, writer v6).
+
 ## 2026.05.13c — 2026-05-13
 
 - **MIT LICENSE shipped in the package.** The repo gained an MIT LICENSE
