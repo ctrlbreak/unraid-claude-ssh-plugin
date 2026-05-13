@@ -25,55 +25,39 @@ configured allowlist (editable in-browser), and the live audit log;
 a Dashboard tile mirrors install health, 24h activity, and allowlist
 size at a glance. No shell needed once the plugin is installed.
 
-## What it does
+## Security model at a glance
 
-On install, the plugin:
+Two enforcement layers, both required to write anything:
 
-1. Lays down the plugin tree at `/usr/local/emhttp/plugins/claude-ssh/`
-2. Runs `install-runtime.sh`, which:
-   - Calls `unraid-readonly-ssh-setup.sh` — creates `claude` user, deploys the
-     filter, configures sshd
-   - Calls `claude-write-setup.sh` — installs `/usr/local/bin/claude-write` +
-     `/usr/local/sbin/claude-write-priv`, sudoers fragment, backup directory
-   - Adds a single `/boot/config/go` hook so the plugin re-applies on reboot
-3. Registers the Settings/Status tab + Dashboard tile in the Unraid web UI
+- **SSH-layer filter** (advisory, fast). The constrained user's
+  `command="..."` forces every login through `/home/<user>/shell-filter.sh`.
+  It runs noglob, parses the argv against an allowlist of ~35 read
+  commands plus the `claude-write` deploy grammar, and rejects everything
+  else with a structured `BLOCKED` log entry. Shell chaining (`;`, `&&`,
+  `||`), command substitution (`$(...)`, backticks), process substitution
+  (`<(...)` / `>(...)`), and arbitrary file redirects are all blocked.
+- **Privileged writer** (enforcement). `claude-write` invocations pass
+  through `sudo` with an argv-pinned NOPASSWD rule, then re-validate
+  everything the filter checked (category, target name, basename /
+  rel-path, extension, mode) before doing an atomic tempfile-rename
+  write. Defence in depth — a stale filter cache can't bypass the
+  writer.
 
-The setup scripts auto-detect plugin invocation (path starts with
-`/usr/local/emhttp/plugins/`) and skip their own self-persistence — boot
-hooks are managed by the plugin so there's a single source of truth.
+**The plugin allowlist is the real blast-radius boundary.** Categories +
+extensions are convention-enforcement; the `plugin <name>` and
+`container <name>` lines in `/mnt/user/appdata/claude-ssh/allowlist.cfg`
+decide which directories the SSH user can reach. Default-deny on
+missing or empty — every 3-arg write rejects if the target isn't in the
+allowlist.
 
-## Versioning
+Every accept and every reject lands in syslog with structured tags
+(`claude-shell` for the filter, `claude-write` for the writer) so the
+audit trail is durable.
 
-Three independent version markers, each bumped only when the thing it
-represents actually changes:
-
-- **Plugin version** — date-based (`YYYY.MM.DD[a-z]`), single source in
-  `claude-ssh.plg`. Bumped on every user-visible change that ships in the
-  package (a source script, a page, a packaged doc). Test-only or repo-asset
-  changes don't bump it.
-- **Filter version** — `vN`, declared as a single `FILTER_VERSION="vN"`
-  assignment at the top of `unraid-readonly-ssh-setup.sh`. Bumped **only**
-  when the runtime filter heredoc — the script that ends up at
-  `/home/<user>/shell-filter.sh` — changes. Setup-script edits outside the
-  heredoc don't bump it. The install banner and `exec.php`'s Status-page
-  parser both read this one assignment, so the printed version and the
-  Status-page version can't diverge.
-- **Writer version** — `vN`, declared as a single `WRITER_VERSION="vN"`
-  assignment at the top of `claude-write-setup.sh`. Same rule: bumps only
-  when the runtime writer (`/usr/local/sbin/claude-write-priv`) changes.
-
-The split exists because filter and writer are **runtime contracts**, not
-package metadata. The Status page surfaces all three so an operator can tell
-at a glance whether the layer that actually enforces things (filter, writer)
-moved, independent of cosmetic plugin churn. A release that only touches docs
-or the Settings UI bumps the plugin version but leaves filter/writer at the
-same numbers; a one-line change to a regex inside the filter bumps the filter
-version even when nothing else moves. Bumping filter or writer version
-implies bumping the plugin version too (the runtime artifact is shipping
-inside a new package), but not the reverse.
-
-The current numbers live in `claude-ssh.plg`, on the Settings → claude-ssh
-page once installed, and in [`CHANGELOG.md`](CHANGELOG.md).
+**Read [`docs/threat-model.md`](docs/threat-model.md) before granting an
+SSH key.** It enumerates exactly what the plugin protects against, what
+it does *not* (root-on-NAS scenarios, supply-chain), and the load-bearing
+assumptions (target-dir perms, sudo wildcard semantics, env_reset).
 
 ## Categories
 
@@ -89,12 +73,13 @@ claude-write plugin-file <plugin-name> <rel-path>   → /usr/local/emhttp/plugin
 ```
 
 `<rel-path>` may be a basename or include up to two subdirectories
-(`scripts/foo.sh`, `javascript/lib/foo.js`, `event/started`). Extension drives
-mode: `.sh` / `.py` are 755, everything else (`.page .php .cfg .js .css
-.html .svg .txt .json`) is 644. The Unraid event-hook convention is
-honoured: an extensionless basename matching `^[a-z][a-z0-9_]{0,32}$` is
-accepted under `event/` (mode 755). See [`docs/categories.md`](docs/categories.md)
-for the full rel-path / extension / mode reference.
+(`scripts/foo.sh`, `javascript/lib/foo.js`, `event/started`). Extension
+drives mode: `.sh` / `.py` are 755, everything else (`.page .php .cfg
+.js .css .html .svg .txt .json`) is 644. The Unraid event-hook convention
+is honoured: an extensionless basename matching `^[a-z][a-z0-9_]{0,32}$`
+is accepted under `event/` (mode 755). See
+[`docs/categories.md`](docs/categories.md) for the full rel-path /
+extension / mode reference.
 
 ### Container (3-arg, gated by container allowlist)
 
@@ -195,6 +180,59 @@ pick. Only the user creation and the sudoers principal change.
 file, then reinstall. The old user account stays around; remove it
 manually with `userdel <old-user>` if no longer needed.
 
+## Install
+
+### End users — Unraid web UI
+
+Open **Plugins → Install Plugin** in the Unraid web UI and paste:
+
+```
+https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/claude-ssh.plg
+```
+
+On install, the plugin lays down its tree at
+`/usr/local/emhttp/plugins/claude-ssh/`, then runs `install-runtime.sh`,
+which calls `unraid-readonly-ssh-setup.sh` (creates the SSH user, deploys
+the filter, configures sshd) and `claude-write-setup.sh` (installs the
+wrapper + privileged writer + sudoers fragment + backup directory). A
+single `/boot/config/go` hook persists the setup across reboots. The
+setup scripts auto-detect plugin invocation and skip their own
+self-persistence — boot hooks are managed by the plugin so there's a
+single source of truth.
+
+Full step-by-step walkthrough including SSH-key setup in
+[`docs/install.md`](docs/install.md).
+
+### Developer iteration — `deploy.sh`
+
+For hacking on the plugin against a real NAS:
+
+```bash
+make test                                  # local lint, build, regression suite
+NAS_HOST=root@nas.local bash deploy.sh     # build .txz + scp + plugin install
+```
+
+`deploy.sh` is a repo-only convenience — end users should install via the
+`.plg` URL above. It builds the `.txz`, renders the `.plg` with the real
+MD5 substituted in, scps both to the NAS's flash, and runs
+`plugin install ... forced`.
+
+### Verify a live install
+
+After installing on a NAS, run the end-to-end smoke test:
+
+```bash
+ROOT_HOST=root@nas.local CLAUDE_HOST=claude@nas.local \
+    CLAUDE_SSH_KEY=~/.ssh/claude_unraid \
+    bash verify-install.sh
+```
+
+It runs ~35 cases across install state, filter behaviour, writer
+behaviour, audit log, and version parity, with one-line fix hints on
+every failure. Repo-asset only — not in the `.txz`, runs from a
+checkout. See [`docs/verifying.md`](docs/verifying.md) for prerequisites
+and output format.
+
 ## Documentation
 
 Topic-specific docs live under [`docs/`](docs/):
@@ -223,7 +261,8 @@ Topic-specific docs live under [`docs/`](docs/):
 Sample client + allowlist:
 
 - [`examples/deploy-via-claude-write.sh`](examples/deploy-via-claude-write.sh)
-  — 30-line bash client demonstrating the four common categories.
+  — Bash client demonstrating the three `claude-write` categories
+  (`scratch`, `plugin-file`, `appdata-script`).
 - [`examples/allowlist.cfg.example`](examples/allowlist.cfg.example) — A
   populated allowlist showing the format.
 
@@ -232,39 +271,6 @@ Project meta:
 - [`CHANGELOG.md`](CHANGELOG.md) — Per-release changes (mirrors `.plg`'s
   `<CHANGES>` block).
 - [`SECURITY.md`](SECURITY.md) — How to report a vulnerability.
-
-## Build & deploy
-
-```bash
-# Run the local test suite (lint, build, filter regression, allowlist
-# parser, idempotency, migration, ...)
-make test
-
-# Build the .txz package
-make
-
-# Build + scp + plugin install on a NAS (developer convenience).
-NAS_HOST=root@nas.local bash deploy.sh
-```
-
-End users install from the Unraid web UI by pasting a release `.plg` URL —
-see [docs/install.md](docs/install.md). `deploy.sh` is a developer-only
-shortcut for iterating against a real NAS during plugin development.
-
-## Verify your install
-
-After installing on a real NAS, run the end-to-end verification suite to
-confirm the filter, writer, sudoers, and audit log are all working:
-
-```bash
-ROOT_HOST=root@nas.local CLAUDE_HOST=claude@nas.local bash verify-install.sh
-```
-
-It runs ~35 cases across install state, filter behaviour, writer
-behaviour, audit log, and version parity, with inline fix hints on
-every failure. See [docs/verifying.md](docs/verifying.md) for the full
-prerequisites and output format. Repo-asset only — not in the `.txz`,
-runs from a checkout.
 
 ## Uninstall
 
@@ -285,12 +291,46 @@ To fully purge:
 userdel claude && rm -rf /home/claude /mnt/cache/appdata/claude-write-backups
 ```
 
+## Versioning
+
+Three independent version markers, each bumped only when the thing it
+represents actually changes:
+
+- **Plugin version** — date-based (`YYYY.MM.DD[a-z]`), single source in
+  `claude-ssh.plg`. Bumped on every user-visible change that ships in the
+  package (a source script, a page, a packaged doc). Test-only or repo-asset
+  changes don't bump it.
+- **Filter version** — `vN`, declared as a single `FILTER_VERSION="vN"`
+  assignment at the top of `unraid-readonly-ssh-setup.sh`. Bumped **only**
+  when the runtime filter heredoc — the script that ends up at
+  `/home/<user>/shell-filter.sh` — changes. Setup-script edits outside the
+  heredoc don't bump it. The install banner and `exec.php`'s Status-page
+  parser both read this one assignment, so the printed version and the
+  Status-page version can't diverge.
+- **Writer version** — `vN`, declared as a single `WRITER_VERSION="vN"`
+  assignment at the top of `claude-write-setup.sh`. Same rule: bumps only
+  when the runtime writer (`/usr/local/sbin/claude-write-priv`) changes.
+
+The split exists because filter and writer are **runtime contracts**, not
+package metadata. The Status page surfaces all three so an operator can tell
+at a glance whether the layer that actually enforces things (filter, writer)
+moved, independent of cosmetic plugin churn. A release that only touches docs
+or the Settings UI bumps the plugin version but leaves filter/writer at the
+same numbers; a one-line change to a regex inside the filter bumps the filter
+version even when nothing else moves. Bumping filter or writer version
+implies bumping the plugin version too (the runtime artifact is shipping
+inside a new package), but not the reverse.
+
+The current numbers live in `claude-ssh.plg`, on the Settings → claude-ssh
+page once installed, and in [`CHANGELOG.md`](CHANGELOG.md).
+
 ## Layout
 
 ```
 claude-ssh.plg              # Plugin manifest, version entity, install/remove hooks
 Makefile                    # tar cJf → claude-ssh.txz, plus `make test`
-deploy.sh                   # quick (claude-write) + --full (plugin install) modes
+deploy.sh                   # Build .txz + scp to NAS + plugin install (developer iteration)
+verify-install.sh           # End-to-end smoke test against a live install
 tests/                      # Local lint / build / regression / idempotency suite
 docs/                       # Topic-specific docs (install, categories, threat-model, ...)
 examples/                   # Sample client + allowlist

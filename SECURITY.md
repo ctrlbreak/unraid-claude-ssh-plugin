@@ -30,10 +30,11 @@ and coordinate disclosure. Public credit on resolution unless you opt out.
 
 ## What doesn't count as a security issue
 
-- Bugs in code-execution categories (`plugin-script`, `appdata-script`) being
-  used as designed. The threat model explicitly notes that allowlisting a
-  plugin or container grants code-execution scope inside that namespace —
-  that's not a vulnerability, it's the contract.
+- Bugs in code-execution surfaces (`plugin-file` writes that land
+  executable — `.sh`, `.py`, or `event/<hook>` — and `appdata-script`
+  writes) being used as designed. The threat model explicitly notes that
+  allowlisting a plugin or container grants code-execution scope inside
+  that namespace — that's not a vulnerability, it's the contract.
 - Root-on-the-NAS scenarios. If an attacker has root, this plugin doesn't
   matter.
 - Issues in dependencies (Unraid base, sshd, sudo, bash). Report those

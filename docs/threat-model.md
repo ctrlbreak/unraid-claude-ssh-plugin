@@ -19,13 +19,21 @@ git repo, a compromised CI runner), the holder still cannot:
   structured `BLOCKED` log.
 - Write to `/boot/config/`. The SSH filter rejects any path under
   `/boot/config/` (the runtime allowlist lives there).
-- Write to filesystem locations not in the category map. Even `claude-write`
-  callers can only target the six directories enumerated in
-  [categories.md](categories.md).
+- Write to filesystem locations not in the category map. `claude-write`
+  callers can only target the three category surfaces enumerated in
+  [categories.md](categories.md): `/tmp/claude-scratch/` (ephemeral),
+  `/usr/local/emhttp/plugins/<allowlisted-plugin>/<rel-path>` (depth-capped
+  at 3 components, with an extension allowlist), and
+  `/mnt/user/appdata/<allowlisted-container>/scripts/`.
 - Escalate to root via the writer. The writer is invoked through `sudo` with
   an argv-pinned NOPASSWD rule — the wrapper is the only command the user
-  can sudo, and the sudoers `*` wildcard matches one whole argument (no
-  shell metacharacters, no extra-args injection).
+  can sudo. Sudo's `*` matches any sequence of characters **except `/`**,
+  so each wildcard slot eats one path component, not "any string". The
+  `plugin-file` rule therefore enumerates all three rel-path arities
+  explicitly (`plugin-file * *`, `plugin-file * */*`, `plugin-file *
+  */*/*`); the writer caps slash count at 2 so a 4-slash pattern would be
+  unreachable. No shell metacharacters reach the writer, no extra-args
+  injection past the enumerated patterns.
 
 ### A buggy or adversarial AI client
 
@@ -34,8 +42,12 @@ If the client (Claude Code, a custom agent, whatever) does something unexpected
 file with a malicious name, tries to overwrite something it shouldn't — the
 guardrails catch it:
 
-- **Path traversal** is blocked by the basename regex: no `..`, no `/`, no
-  leading `.`.
+- **Path traversal** is blocked at parse time. For `scratch` and
+  `appdata-script`, the flat basename forbids `/`, `..`, or leading `.`.
+  For `plugin-file`, the rel-path forbids `..` anywhere, leading or
+  trailing `/`, empty middle components (`//`), and leading-`.` on any
+  component; each component must match `^[a-zA-Z0-9_][a-zA-Z0-9._-]*$`,
+  and the rel-path is capped at 3 components total.
 - **Allowlist bypass** is blocked by default-deny: missing or empty allowlist
   → no 3-arg writes succeed.
 - **Stale filter cache vs. updated allowlist** is fine: the writer re-validates
