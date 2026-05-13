@@ -350,3 +350,8 @@ src/usr/local/emhttp/plugins/claude-ssh/
     ├── unraid-readonly-ssh-setup.sh    # SSH user + filter heredoc (canonical source)
     └── claude-write-setup.sh           # claude-write writer + sudoers (canonical source)
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
