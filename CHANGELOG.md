@@ -8,6 +8,25 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.05.13g — 2026-05-13
+
+- **Simplify the Plugins-page icon.** The PNG-shipping approach from
+  `2026.05.13d/e` is gone. The `.plg` now declares `icon="key"` as a
+  `<PLUGIN>` attribute, which Unraid's `ShowPlugins.php` resolves to
+  the FontAwesome `fa-key` glyph directly — the same library and the
+  same glyph the Dashboard tile and Settings tab already render via
+  `Icon="key"` in their `.page` headers. The icon attribute path
+  (`plugin('icon',$plugin_file)`) wins over the disk-PNG fallback and
+  treats any non-`.png` value as a FontAwesome class name. Net
+  effect: same key visual across all three surfaces, no
+  rasterization, no qlmanage workaround, no CC BY 4.0 attribution.
+- Drops the PNG (`claude-ssh.png`), the FontAwesome attribution
+  from README's License section, and the `test-build.sh` assertion
+  that the PNG is packaged.
+- No filter/writer version bump — runtime artifacts (the heredoc'd
+  filter and writer) are byte-identical with `2026.05.13b/c/d/e/f`
+  (filter v11, writer v6).
+
 ## 2026.05.13f — 2026-05-13
 
 - **Restore plugin name on the Plugins page.** The in-tree

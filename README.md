@@ -355,7 +355,3 @@ src/usr/local/emhttp/plugins/claude-ssh/
 
 MIT — see [LICENSE](LICENSE).
 
-The plugin icon (`claude-ssh.png`) is derived from FontAwesome Free 5's
-`fa-key` glyph ([CC BY 4.0](https://fontawesome.com/license/free)),
-rasterized to PNG and recoloured.
-

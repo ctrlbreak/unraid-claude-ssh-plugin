@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.13f">
+  <!ENTITY version   "2026.05.13g">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -12,9 +12,25 @@
   <!ENTITY emhttpDir "/usr/local/emhttp/plugins/&name;">
 ]>
 
-<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
+<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" icon="key">
 
 <CHANGES>
+###2026.05.13g
+- **Simplify the Plugins-page icon.** The PNG-shipping approach from
+  `2026.05.13d/e` is gone. The `.plg` now declares `icon="key"` as a
+  `&lt;PLUGIN&gt;` attribute, which Unraid resolves to the FontAwesome
+  `fa-key` glyph — same library and same glyph the Dashboard tile
+  and Settings tab already render via `Icon="key"` in their `.page`
+  headers. `dynamix.plugin.manager/include/ShowPlugins.php`'s
+  `plugin('icon',$plugin_file)` path treats non-`.png` icon values as
+  FA class names directly.
+- Drops the PNG (`claude-ssh.png`), the FontAwesome CC BY 4.0
+  attribution from README, and the build-time assertion that the
+  PNG is packaged. Three earlier releases of qlmanage/alpha-channel
+  fiddling collapse into one `.plg` attribute.
+- No filter/writer version bump — runtime artifacts unchanged from
+  `2026.05.13b/c/d/e/f` (filter v11, writer v6).
+
 ###2026.05.13f
 - **Restore plugin name on the Plugins page.** The README shipped in
   `2026.05.13e` was a single paragraph; Unraid's `ShowPlugins.php`

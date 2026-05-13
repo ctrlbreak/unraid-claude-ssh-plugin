@@ -28,7 +28,6 @@ EXPECTED=(
     "usr/local/emhttp/plugins/claude-ssh/scripts/unraid-readonly-ssh-setup.sh"
     "usr/local/emhttp/plugins/claude-ssh/scripts/claude-write-setup.sh"
     "usr/local/emhttp/plugins/claude-ssh/LICENSE"
-    "usr/local/emhttp/plugins/claude-ssh/claude-ssh.png"
     "usr/local/emhttp/plugins/claude-ssh/README.md"
 )
 
