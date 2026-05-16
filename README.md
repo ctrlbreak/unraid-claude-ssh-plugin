@@ -64,7 +64,7 @@ assumptions (target-dir perms, sudo wildcard semantics, env_reset).
 ### Simple
 
 - `claude-write scratch <basename>` → `/tmp/claude-scratch/` (.sh .py .txt
-  .json .log .conf .md .yaml, ephemeral, no backups)
+  .json .log .conf .md .yaml .yml, ephemeral, no backups)
 
 ### Plugin (3-arg, gated by plugin allowlist)
 

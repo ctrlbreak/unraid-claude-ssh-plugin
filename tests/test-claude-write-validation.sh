@@ -379,6 +379,7 @@ b_case "appdata-traversal"   "reject" "x" appdata-script sonarr ../foo.sh
 b_case "scratch-txt"         "accept:644:$SANDBOX/scratch/foo.txt"          "hello" scratch foo.txt
 b_case "scratch-sh"          "accept:755:$SANDBOX/scratch/run.sh"           "#!/bin/sh" scratch run.sh
 b_case "scratch-yaml"        "accept:644:$SANDBOX/scratch/conf.yaml"        "a: 1" scratch conf.yaml
+b_case "scratch-yml"         "accept:644:$SANDBOX/scratch/conf.yml"         "a: 1" scratch conf.yml
 b_case "appdata-sh"          "accept:755:$SANDBOX/appdata/sonarr/scripts/foo.sh" "#!/bin/sh" appdata-script sonarr foo.sh
 
 echo "  behavioural cases: $BPASS passed / $BFAIL failed"

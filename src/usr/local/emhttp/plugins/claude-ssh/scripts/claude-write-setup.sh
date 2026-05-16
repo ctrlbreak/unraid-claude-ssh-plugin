@@ -37,7 +37,7 @@ set -euo pipefail
 # changes. Setup-script edits outside that heredoc don't bump this. Read by
 # exec.php (readVersionMarker), used by the install banner below, asserted by
 # tests/test-versions.sh.
-WRITER_VERSION="v7"
+WRITER_VERSION="v8"
 
 # Auto-detect plugin invocation (see unraid-readonly-ssh-setup.sh for rationale).
 SELF_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
@@ -295,7 +295,7 @@ case "$CATEGORY" in
     scratch)
         # Ephemeral /tmp namespace. No backups, broader extensions, .sh/.py 755.
         TARGET_DIR=/tmp/claude-scratch
-        ALLOWED_EXTS="sh py txt json log conf md yaml"
+        ALLOWED_EXTS="sh py txt json log conf md yaml yml"
         MODE=644   # overridden to 755 below for .sh / .py
         ;;
 esac
