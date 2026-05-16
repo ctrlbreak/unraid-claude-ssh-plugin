@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.13g">
+  <!ENTITY version   "2026.05.16a">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,15 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" icon="key">
 
 <CHANGES>
+###2026.05.16a
+- **Allow `.yaml` in the `scratch` category.** Extension allowlist for
+  `scratch` is now `.sh .py .txt .json .log .conf .md .yaml`. YAML is a
+  common config / data format that previously had to be smuggled in as
+  `.txt`. No change to `plugin-file` or `appdata-script`.
+- Writer `v6 → v7`. Filter unchanged (`v11`) — the filter is advisory
+  and does not gate on extension; the writer is the enforcement point
+  for the extension allowlist.
+
 ###2026.05.13g
 - **Simplify the Plugins-page icon.** The PNG-shipping approach from
   `2026.05.13d/e` is gone. The `.plg` now declares `icon="key"` as a

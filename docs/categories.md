@@ -9,7 +9,7 @@ flat — adding a new category is a deliberate decision, not a config knob.
 
 | Category | Argv shape | Target directory | Allowed extensions | Mode | Allowlist gate |
 |---|---|---|---|---|---|
-| `scratch` | `scratch <basename>` | `/tmp/claude-scratch/` | `.sh .py .txt .json .log .conf .md` | 644 (755 for `.sh` / `.py`) | none |
+| `scratch` | `scratch <basename>` | `/tmp/claude-scratch/` | `.sh .py .txt .json .log .conf .md .yaml` | 644 (755 for `.sh` / `.py`) | none |
 | `plugin-file` | `plugin-file <plugin> <rel-path>` | `/usr/local/emhttp/plugins/<plugin>/<rel-path>` | `.page .php .cfg .sh .py .js .css .html .svg .txt .json` (plus extensionless `event/<hook>`) | 644, or 755 for `.sh` / `.py` / `event/<hook>` | `plugin <name>` |
 | `appdata-script` | `appdata-script <container> <basename>` | `/mnt/user/appdata/<container>/scripts/` | `.sh` | 755 | `container <name>` |
 
