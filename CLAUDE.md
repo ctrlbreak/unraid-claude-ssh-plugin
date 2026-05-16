@@ -2,13 +2,13 @@
 
 > **DOC-SYNC scope (this repo):** the in-repo docs that may reference user-visible changes are the README and the `<CHANGES>` block in `claude-ssh.plg`. Check both on each user-visible change.
 
-> **SAFETY RULE — NO LIVE DEPLOYS WITHOUT EXPLICIT REQUEST**: This plugin is NOT yet running on a real Unraid box. Phase 5/6 changes are unit-tested but not live. Don't run `NAS_HOST=... bash deploy.sh` or any NAS-write command unless the user explicitly asks. The frozen production deployment lives in a sibling repo (see "Cross-repo context" below) and is the user's only working install today.
+> **SAFETY RULE — NO LIVE DEPLOYS WITHOUT EXPLICIT REQUEST**: the user's NAS (`bigboi`, 192.168.0.3) runs the current published plugin (verified-live version recorded in `MEMORY.md`). Don't run `NAS_HOST=... bash deploy.sh`, `verify-install.sh`, or any other NAS-write command unless the user explicitly asks. End users install via the GitHub release `.plg` URL — `deploy.sh` is a developer iteration tool, not the install path.
 
 ## Project Overview
 
 `claude-ssh` is an Unraid plugin packaging a constrained SSH user + a `claude-write` deploy channel. Lets a remote AI client (Claude Code, primarily) write files to a small set of pre-approved locations on the NAS without root access. Defence-in-depth: an SSH `command=` filter validates argv at the SSH layer (advisory), then a privileged sudo'd writer re-validates and atomically writes (enforcement).
 
-This repo is the **public-distribution generalisation** of the plugin. The original lives in a sibling repo (`~/dev/cursor_projects/homelab-scripts/plugin-claude-ssh/`) and is **frozen** until cutover. Until then, all plugin work happens here.
+This repo is the public distribution of the plugin and the standalone source of truth. (Originally a generalisation of a sibling-repo fork in `homelab-scripts/`; cutover completed 2026-05-16 and the sibling copy has been archived.)
 
 Goals: small handful of external adopters running the plugin. No CA listing until 5+ users prove the design.
 
@@ -37,11 +37,10 @@ src/usr/local/emhttp/plugins/claude-ssh/
 
 Active phase plan and per-phase progress live in **project memory** (NOT this file — they change too often). See:
 
-- `~/.claude/projects/-Users-patrick-dev-cursor-projects-claude-ssh-plugin/memory/project_claude_ssh_public_plugin.md` — phase plan
-- Same dir, `handoff_*.md` — per-phase handoffs with edge cases and resume prompts
+- `~/.claude/projects/-Users-patrick-dev-cursor-projects-claude-ssh-plugin/memory/MEMORY.md` — index of all phase plans, handoffs, and the live-state recap
 - `~/.claude/plans/i-m-considering-whether-i-nifty-tiger.md` — full design memo (architecture + coupling-point inventory + classification rationale)
 
-**Current state (as of 2026-05-13):** Phase 10 done. Plugin `2026.05.13b`, filter v11, writer v6. The four legacy `plugin-{page,include,script,cfg}` categories have been collapsed into a single `plugin-file <plugin> <rel-path>` form with up to 3 path components, an extension-driven mode (.sh / .py → 755, else 644), and a narrow `event/<hook>` extensionless exception (Unraid event-hook convention). Sudoers now enumerates three rel-path arities because sudo's `*` does not match `/`. 18 tests green locally (most have grown in case count to cover the new shape and the gotcha drift checks). **Breaking** for any direct callers of the old plugin-* category names (the user's own `homelab-scripts/scripts/deploy-via-claude-write.sh` consumer is the only known one — must be migrated in that repo's session before the new plugin lands on bigboi).
+Current live version, filter/writer versions, and "what's the most recent commit" all live in `MEMORY.md` — check there rather than restating the snapshot here (this file would go stale on every release otherwise).
 
 ## Working style — keep doing these
 
@@ -174,7 +173,7 @@ ROOT_HOST=root@bigboi CLAUDE_HOST=claude@bigboi \
     bash verify-install.sh                # end-to-end verification (live NAS)
 ```
 
-`deploy.sh` writes to a real NAS — only run when explicitly authorised. Currently no NAS has this version of the plugin installed; the user's NAS runs `homelab-scripts/plugin-claude-ssh/`. End users install via the release `.plg` URL, not via `deploy.sh`.
+`deploy.sh` writes to a real NAS — only run when explicitly authorised. `bigboi` runs the latest published release (see `MEMORY.md` for current version), so redeploying without permission would replace a known-good install. End users install via the release `.plg` URL, not via `deploy.sh`.
 
 `verify-install.sh` is the end-to-end smoke test for a live install — repo-asset only (not in `.txz`), reads-only against the NAS apart from a few claude-write test files it cleans up. Same "only run when explicitly authorised" rule applies. Documented in [`docs/verifying.md`](docs/verifying.md).
 
@@ -196,29 +195,14 @@ EOF
 
 ## What NOT to do
 
-- **Don't backport to `homelab-scripts/plugin-claude-ssh/`.** That repo is frozen until cutover. The user runs that version on their NAS today.
-- **Don't deploy live without permission.** No NAS has this version installed yet; first live install will probably surface CSS/theme tweaks (the Settings UI hasn't been seen against a real Unraid theme).
+- **Don't deploy live without permission.** `bigboi` runs the published release; an unsolicited `deploy.sh` would clobber a known-good install. The user's flow is to bump version → push tag → GitHub Actions cuts release → install from the plugin manager. `deploy.sh` is dev iteration only.
 - **Don't bump filter/writer versions for setup-script-only changes** — only bump when the runtime artifact (the heredoc'd filter or the heredoc'd writer) changes.
-- **Don't construct raw `ssh`/`scp` to the NAS from this repo.** If live testing becomes necessary, switch back to the homelab-scripts session which has the `/unraid-ssh` skill.
+- **Don't construct raw `ssh`/`scp` to the NAS.** If live access is needed, use the `/unraid-ssh` skill (the sanctioned channel — its description literally says "never construct raw ssh/scp commands"). `verify-install.sh` is the other repo-blessed entry point and is read-mostly.
 - **Don't add comments that explain WHAT the code does** — variable names already do that. Comments are for WHY: hidden constraints, subtle invariants, workarounds for specific bugs.
 - **Don't introduce abstraction for hypothetical future requirements.** Three similar lines is better than a premature abstraction.
 
-## Cross-repo context
-
-This repo (`claude-ssh-plugin`) and `homelab-scripts` (a sibling repo at `~/dev/cursor_projects/homelab-scripts/`) have a frozen-vs-active relationship:
-
-| Concern | Where |
-|---|---|
-| Plugin source of truth (active development) | This repo |
-| Frozen production deployment | `homelab-scripts/plugin-claude-ssh/` |
-| `/unraid-ssh` skill (raw NAS access) | homelab-scripts session |
-| Other unrelated homelab work | homelab-scripts session |
-
-When the user wants to switch contexts (e.g. "let me check the live NAS state") they switch back to a homelab-scripts session. Don't try to ssh into the NAS from a session running here.
-
 ## Useful pointers
 
-- **Phase plan / status:** `~/.claude/projects/-Users-patrick-dev-cursor-projects-claude-ssh-plugin/memory/project_claude_ssh_public_plugin.md`
-- **Latest handoff:** `~/.claude/projects/-Users-patrick-dev-cursor-projects-claude-ssh-plugin/memory/handoff_2026-05-06_claude_ssh_phase6.md`
+- **Phase plan / status + handoffs:** `~/.claude/projects/-Users-patrick-dev-cursor-projects-claude-ssh-plugin/memory/MEMORY.md` (index of all phase docs and the live-state recap)
 - **Design memo (architecture + coupling-point inventory):** `~/.claude/plans/i-m-considering-whether-i-nifty-tiger.md`
 - **Public-facing docs:** `README.md` in this repo
