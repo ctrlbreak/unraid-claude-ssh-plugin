@@ -48,8 +48,11 @@ if [ -z "$md5" ]; then
     echo "ERROR: neither md5sum nor md5 available" >&2
     exit 1
 fi
-PLG_RENDERED=$(mktemp)
-trap 'rm -f "$PLG_RENDERED"' EXIT
+# Render into a tempdir with the proper basename so scp's progress
+# line shows "claude-ssh.plg" rather than the mktemp tempfile name.
+PLG_TMP_DIR=$(mktemp -d)
+PLG_RENDERED="$PLG_TMP_DIR/claude-ssh.plg"
+trap 'rm -rf "$PLG_TMP_DIR"' EXIT
 sed "s/__MD5__/$md5/g" "$REPO_ROOT/claude-ssh.plg" > "$PLG_RENDERED"
 if grep -q '__MD5__' "$PLG_RENDERED"; then
     echo "ERROR: __MD5__ placeholder still present after substitution" >&2
