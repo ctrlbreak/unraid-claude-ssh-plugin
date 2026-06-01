@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.05.16c">
+  <!ENTITY version   "2026.06.01a">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,25 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" icon="key">
 
 <CHANGES>
+###2026.06.01a
+- **Fix: SSH public key now survives a reboot.** Unraid rebuilds `/home`
+  from RAM on every boot, and earlier versions only ever wrote the pubkey
+  to the live `/home/&lt;user&gt;/.ssh/authorized_keys` — so the first reboot
+  wiped it and every client got `Permission denied (publickey)`. The
+  pubkey is now persisted on flash at
+  `/boot/config/plugins/claude-ssh/authorized_keys` and re-applied (with
+  the `command=` filter restriction, `root:root 644`) on every boot.
+- **Add keys by editing the flash file**, not the live file:
+  `echo 'ssh-ed25519 AAAA... comment' >> /boot/config/plugins/claude-ssh/authorized_keys`
+  then reinstall or reboot. The live file is regenerated from flash, so
+  direct edits to it are lost on the next boot.
+- **Upgrade auto-rescue:** if a pre-existing key is found only in the live
+  file, it is captured to the flash store on the next setup run (before a
+  reboot can wipe it). The flash copy is authoritative thereafter.
+- No filter/writer version bump — runtime artifacts unchanged (filter
+  `v11`, writer `v8`). The change is in the setup script's key handling,
+  outside the filter/writer heredocs.
+
 ###2026.05.16c
 - **No functional change.** Rebuild of `2026.05.16b` on the Node 24
   Actions runner — validates the workflow's bump from

@@ -26,8 +26,9 @@ These files survive every upgrade:
 | Path | What it is |
 |---|---|
 | `/boot/config/plugins/claude-ssh/username` | Configured SSH username (single line) |
+| `/boot/config/plugins/claude-ssh/authorized_keys` | Your SSH public key(s) — the source of truth, re-applied to the live file on every boot |
 | `/mnt/user/appdata/claude-ssh/allowlist.cfg` | Plugin + container allowlist with all your entries |
-| `/home/<user>/` | The SSH user's home, including `.ssh/authorized_keys` and key fingerprint trust |
+| `/home/<user>/` | The SSH user's home; `.ssh/authorized_keys` is regenerated from the flash copy above on every boot (Unraid rebuilds `/home` from RAM) |
 | `/mnt/cache/appdata/claude-write-backups/` | Rotated backups of every write that overwrote a prior file |
 | `/var/log/syslog` (subject to Unraid's rotation) | Audit trail |
 
@@ -121,9 +122,10 @@ plugin remove claude-ssh
 plugin install <old-plg-url>
 ```
 
-Because `username`, `allowlist.cfg`, `authorized_keys`, and the SSH user
-account all survive removal, the rollback comes back up in the same logical
-state — same SSH user, same allowlist, same key trust.
+Because the configured `username`, `allowlist.cfg`, the flash-persisted
+`authorized_keys`, and the SSH user account all survive removal, the rollback
+comes back up in the same logical state — same SSH user, same allowlist, same
+key trust.
 
 If you also want to fully purge user state before rolling back:
 

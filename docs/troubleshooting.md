@@ -12,24 +12,35 @@ $ ssh -i ~/.ssh/claude_unraid claude@nas 'claude-shell ping'
 claude@nas: Permission denied (publickey).
 ```
 
-**Likely cause:** the public key isn't in the SSH user's `authorized_keys`,
-or the file permissions are wrong.
+**Likely cause:** the public key isn't in the SSH user's live `authorized_keys`.
+The classic trigger is the **first reboot**: Unraid rebuilds `/home` from RAM on
+boot, and the plugin re-seeds the live `authorized_keys` from its flash copy at
+`/boot/config/plugins/claude-ssh/authorized_keys`. If that flash copy is empty
+(e.g. on an older plugin the key was only ever added to the live file), the live
+file comes back empty after the reboot and the server rejects your key.
 
-**Fix:** from a root SSH session on the NAS:
+**Fix:** from a root SSH session on the NAS, make sure your pubkey is in the
+flash store (the source of truth), then re-apply it:
 
 ```bash
-ls -la /home/claude/.ssh/
-# Expected: drwx------ claude users   .ssh
-#           -rw------- claude users   authorized_keys
+# 1. Confirm/add your pubkey to the flash copy:
+grep -qF 'ssh-ed25519 AAAA...' /boot/config/plugins/claude-ssh/authorized_keys \
+  || echo 'ssh-ed25519 AAAA... claude-unraid' \
+       >> /boot/config/plugins/claude-ssh/authorized_keys
 
-# Fix perms if wrong:
-chown -R claude:users /home/claude/.ssh
-chmod 700 /home/claude/.ssh
-chmod 600 /home/claude/.ssh/authorized_keys
+# 2. Re-apply it to the live file (this is also what runs on every boot):
+bash /usr/local/emhttp/plugins/claude-ssh/scripts/install-runtime.sh
 
-# Confirm your pubkey is present:
-grep -F "ssh-ed25519 AAAA..." /home/claude/.ssh/authorized_keys
+# 3. Verify — the live file is deliberately root:root 644 with a command= prefix:
+ls -la /home/claude/.ssh/authorized_keys
+#   -rw-r--r-- root root   authorized_keys
+cat /home/claude/.ssh/authorized_keys
+#   command="/home/claude/shell-filter.sh",no-port-forwarding,... ssh-ed25519 AAAA...
 ```
+
+Don't `chown` the live file back to `claude` or `chmod 600` it — the plugin
+locks it to `root:root 644` on purpose (a compromised SSH user must not be able
+to rewrite its own `authorized_keys` and drop the `command=` restriction).
 
 If the user is named something other than `claude`, substitute throughout
 (`cat /boot/config/plugins/claude-ssh/username`).

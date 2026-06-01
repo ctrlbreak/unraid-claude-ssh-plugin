@@ -8,6 +8,26 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.06.01a — 2026-06-01
+
+- **Fix: SSH public key now survives a reboot.** Unraid rebuilds `/home`
+  from RAM on every boot, and earlier versions only ever wrote the pubkey
+  to the live `/home/<user>/.ssh/authorized_keys` — so the first reboot
+  wiped it and every client got `Permission denied (publickey)`. The
+  pubkey is now persisted on flash at
+  `/boot/config/plugins/claude-ssh/authorized_keys` and re-applied (with
+  the `command=` filter restriction, `root:root 644`) on every boot.
+- **Add keys by editing the flash file**, not the live file:
+  `echo 'ssh-ed25519 AAAA... comment' >> /boot/config/plugins/claude-ssh/authorized_keys`
+  then reinstall or reboot. The live file is regenerated from flash, so
+  direct edits to it are lost on the next boot.
+- **Upgrade auto-rescue:** if a pre-existing key is found only in the live
+  file, it is captured to the flash store on the next setup run (before a
+  reboot can wipe it). The flash copy is authoritative thereafter.
+- No filter/writer version bump — runtime artifacts unchanged (filter
+  `v11`, writer `v8`). The change is in the setup script's key handling,
+  outside the filter/writer heredocs.
+
 ## 2026.05.13g — 2026-05-13
 
 - **Simplify the Plugins-page icon.** The PNG-shipping approach from

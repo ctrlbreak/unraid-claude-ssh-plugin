@@ -3,8 +3,9 @@
 # claude-ssh plugin — runtime uninstaller
 # =============================================================================
 # Called by claude-ssh.plg on plugin remove. Non-destructive by default:
-# tears down runtime artifacts but PRESERVES the SSH user, /home/<user>/
-# (authorized_keys), and /mnt/cache/appdata/claude-write-backups/.
+# tears down runtime artifacts but PRESERVES the SSH user, /home/<user>/, the
+# flash-persisted pubkeys (/boot/config/plugins/claude-ssh/authorized_keys), and
+# /mnt/cache/appdata/claude-write-backups/.
 #
 # Username is resolved from CLAUDE_SSH_USERNAME env var or
 # /boot/config/plugins/claude-ssh/username file (defaults to "claude").
@@ -130,5 +131,5 @@ fi
 
 # --- 6. Final message ---
 log "uninstall-runtime.sh complete"
-log "PRESERVED: /home/$USERNAME (authorized_keys), $USERNAME user, claude-write-backups"
-log "To fully purge: userdel $USERNAME && rm -rf /home/$USERNAME /mnt/cache/appdata/claude-write-backups"
+log "PRESERVED: flash pubkeys (/boot/config/plugins/claude-ssh/authorized_keys), /home/$USERNAME, $USERNAME user, claude-write-backups"
+log "To fully purge: userdel $USERNAME && rm -rf /home/$USERNAME /mnt/cache/appdata/claude-write-backups /boot/config/plugins/claude-ssh"

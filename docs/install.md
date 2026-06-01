@@ -36,19 +36,20 @@
    The plugin downloads the matching `.txz` package, extracts it to
    `/usr/local/emhttp/plugins/claude-ssh/`, and runs `install-runtime.sh`.
 
-3. **Add your SSH public key** to the filtered user's authorized_keys. From a
-   root SSH session on the NAS:
+3. **Add your SSH public key** so it survives reboots. Unraid rebuilds `/home`
+   from RAM on every boot, so the key must live on flash; the plugin re-applies
+   it to the live `authorized_keys` on every boot (wrapped with the `command=`
+   filter restriction and locked to `root:root 644`). From a root SSH session on
+   the NAS:
 
    ```bash
-   mkdir -p /home/claude/.ssh
-   chown claude:users /home/claude/.ssh
-   chmod 700 /home/claude/.ssh
-   cat >> /home/claude/.ssh/authorized_keys << 'KEY'
-   ssh-ed25519 AAAA... claude-ssh@workstation
-   KEY
-   chown claude:users /home/claude/.ssh/authorized_keys
-   chmod 600 /home/claude/.ssh/authorized_keys
+   echo 'ssh-ed25519 AAAA... claude-ssh@workstation' \
+     >> /boot/config/plugins/claude-ssh/authorized_keys
    ```
+
+   Then reinstall the plugin (**Plugins → claude-ssh**) or reboot to apply it.
+   Don't edit `/home/claude/.ssh/authorized_keys` directly — it's regenerated
+   from the flash copy on each boot, so direct edits are lost.
 
    (Substitute `claude` with your configured username if you set
    `CLAUDE_SSH_USERNAME` — see [the username section in the README](../README.md#configurable-ssh-username).)

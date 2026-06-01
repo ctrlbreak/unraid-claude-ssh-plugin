@@ -18,6 +18,7 @@ TESTS=(
     test-settings-save.sh
     test-dashboard-action.sh
     test-username-configurable.sh
+    test-key-persistence.sh
     test-idempotency.sh
     test-migration.sh
     test-upgrade-path.sh

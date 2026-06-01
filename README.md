@@ -281,14 +281,15 @@ plugin remove claude-ssh
 This is non-destructive by default — removes the plugin tree, sudoers
 fragment, sshd_config additions, and `/boot/config/go` hook, but **preserves**:
 
-- `/home/claude/` (authorized_keys, key fingerprint trust)
+- `/boot/config/plugins/claude-ssh/` (your pubkey + configured username — the reboot-durable copies)
+- `/home/claude/` (regenerated from the flash pubkey on each boot)
 - `/mnt/cache/appdata/claude-write-backups/` (history of past writes)
 - The `claude` user account
 
 To fully purge:
 
 ```
-userdel claude && rm -rf /home/claude /mnt/cache/appdata/claude-write-backups
+userdel claude && rm -rf /home/claude /mnt/cache/appdata/claude-write-backups /boot/config/plugins/claude-ssh
 ```
 
 ## Versioning

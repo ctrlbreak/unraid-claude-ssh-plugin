@@ -52,6 +52,14 @@ USERNAME=$(cs_resolve_username) || exit 1
 HOME_DIR="/home/$USERNAME"
 FILTER_SCRIPT="$HOME_DIR/shell-filter.sh"
 
+# Flash-persisted authorized_keys. Unraid rebuilds its rootfs (including /home)
+# from RAM on every boot, so a pubkey added only to the live file is lost on the
+# first reboot. This flash copy is the source of truth and is re-applied on each
+# boot (see cs_seed_authorized_keys). Only root reads it, so /boot's FAT
+# mode-700 mask is harmless — unlike the allowlist, which the constrained user
+# must read at runtime and therefore lives on the array.
+PERSIST_KEYS="/boot/config/plugins/claude-ssh/authorized_keys"
+
 # Auto-detect plugin invocation: skip /boot/config/ self-persist when running
 # from inside a plugin path. The plugin's install-runtime.sh handles boot
 # hooks separately, so two scripts don't fight over /boot/config/go entries.
@@ -469,34 +477,73 @@ chown root:root "$FILTER_SCRIPT"
 chmod 755 "$FILTER_SCRIPT"
 echo "Installed shell filter at $FILTER_SCRIPT."
 
+# Persist + re-seed the SSH user's authorized_keys across reboots.
+#
+# Unraid rebuilds its rootfs (including /home) from RAM on every boot, so a
+# pubkey added only to /home/<user>/.ssh/authorized_keys vanishes on the first
+# reboot. The flash copy at $PERSIST_KEYS is authoritative; the live file is a
+# derivative, rebuilt from it on every boot with the command= filter restriction
+# applied. Add or remove keys by editing $PERSIST_KEYS, not the live file (the
+# live file is overwritten from flash on the next setup run / boot).
+#
+# Consumes globals: HOME_DIR, FILTER_SCRIPT, PERSIST_KEYS.
+cs_seed_authorized_keys() {
+    local ak="$HOME_DIR/.ssh/authorized_keys"
+    local persist_dir
+    persist_dir=$(dirname "$PERSIST_KEYS")
+    [ -d "$persist_dir" ] || mkdir -p "$persist_dir"
+    touch "$ak"
+
+    # One-time capture: bootstrap the flash store from a pre-existing live file.
+    # Rescues a legacy install whose key was added straight to /home before this
+    # logic shipped — the key is lifted to flash on the next setup run, before a
+    # reboot can wipe it. Only when flash is empty: once populated, flash is the
+    # source of truth and is never auto-overwritten from the live file.
+    if [ ! -s "$PERSIST_KEYS" ]; then
+        local captured
+        captured=$(grep -oE 'ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+ ?.*' "$ak" 2>/dev/null || true)
+        if [ -n "$captured" ]; then
+            printf '%s\n' "$captured" > "$PERSIST_KEYS"
+            chmod 644 "$PERSIST_KEYS"
+            echo "Captured existing pubkey(s) to $PERSIST_KEYS for reboot persistence."
+        fi
+    fi
+
+    # Re-seed the live file from flash. Each flash line is normalised to its bare
+    # pubkey (any command= prefix stripped) then re-wrapped, so a full
+    # authorized_keys line pasted into flash isn't double-wrapped. Blank lines
+    # and # comments are skipped; lines with no recognisable key are dropped.
+    if [ -s "$PERSIST_KEYS" ]; then
+        : > "$ak"
+        local line key
+        while IFS= read -r line; do
+            case "$line" in ''|\#*) continue ;; esac
+            key=$(printf '%s\n' "$line" | grep -oE 'ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+ ?.*' || true)
+            [ -z "$key" ] && continue
+            echo "command=\"$FILTER_SCRIPT\",no-port-forwarding,no-agent-forwarding,no-X11-forwarding $key" >> "$ak"
+        done < "$PERSIST_KEYS"
+        echo "Re-seeded $ak from flash ($PERSIST_KEYS) with command= restriction."
+    else
+        echo ""
+        echo "=========================================="
+        echo "  NEXT STEP: add your public key (persists across reboots)"
+        echo "=========================================="
+        echo "On your workstation, create a key if you don't have one:"
+        echo "  ssh-keygen -t ed25519 -C 'claude-unraid' -f ~/.ssh/claude_unraid"
+        echo ""
+        echo "Then, from a root shell on the NAS, append the PUBLIC key to flash:"
+        echo "  echo 'ssh-ed25519 AAAA... claude-unraid' >> $PERSIST_KEYS"
+        echo ""
+        echo "Reinstall the plugin (or reboot) to apply it. The key lives on flash"
+        echo "and is re-applied with the command= filter restriction on every boot."
+        echo ""
+    fi
+}
+
 # --- 3. Set up SSH key authentication with command= restriction ---
 mkdir -p "$HOME_DIR/.ssh"
 chmod 700 "$HOME_DIR/.ssh"
-
-if [ -f "$HOME_DIR/.ssh/authorized_keys" ]; then
-    # Preserve existing public key(s) but ensure command= prefix is set
-    # Strip any existing command= prefix, then re-add it
-    if grep -q "ssh-" "$HOME_DIR/.ssh/authorized_keys"; then
-        # Extract just the key(s) without any existing options
-        KEYS=$(grep -oE 'ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+ ?.*' "$HOME_DIR/.ssh/authorized_keys")
-        : > "$HOME_DIR/.ssh/authorized_keys"
-        while IFS= read -r key; do
-            echo "command=\"$FILTER_SCRIPT\",no-port-forwarding,no-agent-forwarding,no-X11-forwarding $key" >> "$HOME_DIR/.ssh/authorized_keys"
-        done <<< "$KEYS"
-        echo "Updated authorized_keys with command= restriction."
-    fi
-else
-    touch "$HOME_DIR/.ssh/authorized_keys"
-    echo ""
-    echo "=========================================="
-    echo "  NEXT STEP: Add your public key"
-    echo "=========================================="
-    echo "From your Mac, run:"
-    echo "  ssh-keygen -t ed25519 -C 'claude-unraid' -f ~/.ssh/claude_unraid"
-    echo ""
-    echo "Then paste the public key here. The script will add the command= prefix."
-    echo ""
-fi
+cs_seed_authorized_keys
 
 # v6 hardening: lock SSH config to root so a compromised SSH user can't
 # rewrite authorized_keys (e.g. via `curl -K cfg` with `output=...`) to drop
