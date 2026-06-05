@@ -57,6 +57,35 @@ function cs_username() {
     return 'claude';
 }
 
+// CSRF guard for STATE-CHANGING actions. save_allowlist controls the SSH write
+// blast radius, so it must not be driveable cross-site; read-only actions are
+// side-effect-free and ungated. The expected token comes from the shared
+// cs_csrf_token() helper (include/csrf.php) — the SAME source the page uses to
+// emit the token, so they can't disagree. hash_equals keeps the compare
+// constant-time. The CLI test path never reaches the dispatcher (see the
+// php_sapi_name guard below), so this doesn't run there.
+require_once __DIR__ . '/csrf.php';
+function cs_csrf_ok() {
+    $expected = cs_csrf_token();
+    if ($expected === '') return false;
+    // PHP collapses duplicate POST keys to the LAST value, and Unraid's dynamix
+    // ajax wrapper appends its OWN csrf_token to every POST — on this page that
+    // appended copy arrives empty and clobbers the valid token the page sent
+    // earlier in the body. So scan EVERY csrf_token in the raw body and accept
+    // if any one matches (urlencoded form body; reading php://input does not
+    // disturb the already-parsed $_POST used by save_allowlist below).
+    $raw = (string)@file_get_contents('php://input');
+    foreach (explode('&', $raw) as $pair) {
+        $eq = strpos($pair, '=');
+        if ($eq === false || substr($pair, 0, $eq) !== 'csrf_token') continue;
+        $val = urldecode(substr($pair, $eq + 1));
+        if ($val !== '' && hash_equals($expected, $val)) return true;
+    }
+    // Normal single-token case (no duplicate / non-form body).
+    $sent = isset($_POST['csrf_token']) ? (string)$_POST['csrf_token'] : '';
+    return $sent !== '' && hash_equals($expected, $sent);
+}
+
 // CLI guard: skip the request dispatcher when we're invoked from PHP CLI
 // (i.e. from a test). Helper functions above remain callable.
 if (php_sapi_name() === 'cli') return;
@@ -130,6 +159,12 @@ case 'load_allowlist':
     break;
 
 case 'save_allowlist':
+    // State-changing: require a valid CSRF token (see cs_csrf_ok).
+    if (!cs_csrf_ok()) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'errors' => ['CSRF token missing or invalid — reload the Settings page and try again']]);
+        break;
+    }
     $plugins    = $_POST['plugins']    ?? '';
     $containers = $_POST['containers'] ?? '';
     $result = save_allowlist_file($plugins, $containers);

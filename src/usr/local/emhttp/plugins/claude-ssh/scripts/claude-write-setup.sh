@@ -37,7 +37,7 @@ set -euo pipefail
 # changes. Setup-script edits outside that heredoc don't bump this. Read by
 # exec.php (readVersionMarker), used by the install banner below, asserted by
 # tests/test-versions.sh.
-WRITER_VERSION="v8"
+WRITER_VERSION="v9"
 
 # Auto-detect plugin invocation (see unraid-readonly-ssh-setup.sh for rationale).
 SELF_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
@@ -342,6 +342,22 @@ fi
 
 DEST="$TARGET_DIR/$BASENAME"
 
+# --- Symlink guard (v9): never let a root-owned write follow a planted link ---
+# This writer runs as root via sudo. The category target dir is NOT always
+# root-only: for appdata-script it is /mnt/user/appdata/<container>/scripts,
+# which a container often owns group-writable — so the constrained user could
+# plant a symlink at the destination basename and redirect a root-owned write
+# (and the backup `cp` read below) into /etc, /boot/config, a sudoers file, etc.
+# Refuse it. The target-dir leaf is re-checked after mkdir, and the atomic write
+# uses an unpredictable mktemp name, closing the predictable-temp vector too.
+# We use `-L` rather than realpath() because /mnt/user is a FUSE union mount (a
+# mount point, not a symlink) where realpath can mislead; `-L` flags only a
+# genuine symlink and won't false-reject normal layouts. Defence-in-depth over
+# the dir-ownership assumption in docs/threat-model.md (which also documents the
+# residual ancestor-symlink case); a fully TOCTOU-proof writer would need
+# openat2(RESOLVE_NO_SYMLINKS), unavailable from shell.
+[ -L "$DEST" ] && reject "destination exists as a symlink (refusing to follow): $DEST"
+
 # --- Read stdin into a tempfile with size cap ---
 TMP_INPUT="$(mktemp /tmp/claude-write.XXXXXX)"
 TMP_DEST=""
@@ -395,7 +411,13 @@ fi
 # chown is best-effort: /mnt/user FUSE rejects ownership changes silently in
 # some cases, and cp already creates as root (we run as root via sudo).
 mkdir -p "$TARGET_DIR" 2>/dev/null || true
-TMP_DEST="${DEST}.claude-write.${TS}.tmp"
+# Re-check the leaf after mkdir (catches a symlink planted between the guard
+# above and here, or a pre-existing symlink-to-dir that mkdir -p left intact).
+[ -L "$TARGET_DIR" ] && reject "target dir is a symlink (refusing to follow): $TARGET_DIR"
+# mktemp gives an UNPREDICTABLE name created O_EXCL inside the target dir, so a
+# pre-planted symlink at a guessable temp path can't be followed by the cp.
+TMP_DEST=$(mktemp "$TARGET_DIR/.claude-write.XXXXXX" 2>/dev/null) \
+    || reject "could not create tempfile in target dir"
 cp "$TMP_INPUT" "$TMP_DEST"
 chmod "$MODE" "$TMP_DEST" || reject "chmod on tempfile failed (FS or perms issue)"
 chown root:root "$TMP_DEST" 2>/dev/null || true

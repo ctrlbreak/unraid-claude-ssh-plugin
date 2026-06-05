@@ -10,7 +10,10 @@ if ! command -v php >/dev/null 2>&1; then
     exit 77
 fi
 
-EXEC="$ROOT/src/usr/local/emhttp/plugins/claude-ssh/include/exec.php"
+INCLUDES=(
+    "$ROOT/src/usr/local/emhttp/plugins/claude-ssh/include/exec.php"
+    "$ROOT/src/usr/local/emhttp/plugins/claude-ssh/include/csrf.php"
+)
 PAGES=(
     "$ROOT/src/usr/local/emhttp/plugins/claude-ssh/ClaudeSsh.page"
     "$ROOT/src/usr/local/emhttp/plugins/claude-ssh/ClaudeSshDashboard.page"
@@ -18,14 +21,16 @@ PAGES=(
 
 FAIL=0
 
-# 1. exec.php — direct lint.
-if ! php -l "$EXEC" >/dev/null; then
-    echo "  FAIL: $EXEC"
-    php -l "$EXEC"
-    FAIL=1
-else
-    echo "  ok: include/exec.php"
-fi
+# 1. include/*.php — direct lint.
+for inc in "${INCLUDES[@]}"; do
+    if ! php -l "$inc" >/dev/null; then
+        echo "  FAIL: $inc"
+        php -l "$inc"
+        FAIL=1
+    else
+        echo "  ok: include/$(basename "$inc")"
+    fi
+done
 
 # 2. .page files — strip frontmatter (lines up to and including the `---`
 # separator), then lint as PHP. Unraid pages are PHP with a header block.

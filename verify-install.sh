@@ -487,6 +487,45 @@ else
     record_fail "2.15" "dmesg -C not blocked — flag guard missing (got: $out)" "$filter_hint_block" "$filter_doc_anchor"
 fi
 
+# 2.16-2.18 (filter v13): command-separator bypass closed. Pre-v13 the chaining
+# check missed `;` with no trailing space and a bare `&`, so an allowed first
+# token (`ls`) carried an arbitrary second command past the filter. These must
+# now BLOCK; the quoted form must still pass (separator is literal data).
+filter_hint_v13="filter let a command separator through — bigboi may still be running filter v12 or earlier (reinstall the plugin / re-run install-runtime.sh as root)"
+
+out=$(ssh_claude 'ls /mnt ;env' 2>&1 || true)
+if printf '%s' "$out" | grep -q 'BLOCKED'; then
+    record_pass "2.16" "blocked: '; ' separator with no trailing space (v13)"
+else
+    record_fail "2.16" "semicolon-no-space separator not blocked — v13 bypass live (got: $(printf '%s' "$out" | head -1))" "$filter_hint_v13" "$filter_doc_anchor"
+fi
+
+out=$(ssh_claude 'ls /mnt & env' 2>&1 || true)
+if printf '%s' "$out" | grep -q 'BLOCKED'; then
+    record_pass "2.17" "blocked: bare '&' background separator (v13)"
+else
+    record_fail "2.17" "bare-ampersand separator not blocked — v13 bypass live (got: $(printf '%s' "$out" | head -1))" "$filter_hint_v13" "$filter_doc_anchor"
+fi
+
+# Quoted separator is literal pattern data, not a command operator — must pass
+# the filter (grep may exit non-zero on no-match; only a BLOCKED line is a
+# filter rejection).
+out=$(ssh_claude 'grep "a;b" /etc/hostname' 2>&1 || true)
+if printf '%s' "$out" | grep -q 'BLOCKED'; then
+    record_fail "2.18" "quoted ';' wrongly blocked — v13 separator check not quote-aware (got: $(printf '%s' "$out" | head -1))" "$filter_hint_v13" "$filter_doc_anchor"
+else
+    record_pass "2.18" "allowed (v13): quoted ';' is literal, not a separator"
+fi
+
+# 2.19 blocked (filter v14): dmesg -F reads an arbitrary file via dmesg — a
+# GTFOBins read-escape the pre-v14 mutator-only guard let through.
+out=$(ssh_claude 'dmesg -F /etc/passwd' 2>&1 || true)
+if printf '%s' "$out" | grep -q 'BLOCKED'; then
+    record_pass "2.19" "blocked: dmesg -F (arbitrary-file read, v14)"
+else
+    record_fail "2.19" "dmesg -F not blocked — v14 flag hardening missing (got: $(printf '%s' "$out" | head -1))" "$filter_hint_v13" "$filter_doc_anchor"
+fi
+
 # ===========================================================================
 # Layer 3 — Writer behaviour (constrained-user SSH via claude-write)
 # ===========================================================================

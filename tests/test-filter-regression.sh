@@ -99,6 +99,10 @@ run_case allow 'dmesg'
 run_case allow 'dmesg -T'
 run_case allow 'dmesg -e'                 # lowercase reltime is read-only (vs -E console-on)
 run_case allow 'dmesg | grep -i error'
+# v14 dmesg: read flags must stay allowed (case-sensitive guard)
+run_case allow 'dmesg -f kern'            # lowercase -f (facility) is read-only (vs -F file)
+run_case allow 'dmesg -P'                 # -P (nopager) is read-only
+run_case allow 'dmesg -x -T'
 # Simple category
 run_case allow 'claude-write scratch foo.txt'
 # v11 plugin-file: top-level files, 1-component rel-path
@@ -122,6 +126,12 @@ run_case allow 'claude-write plugin-file claude-ssh event/disks_mounted'
 # v9 container category (appdata-script) with container allowlist
 run_case allow 'claude-write appdata-script sonarr foo.sh'
 run_case allow 'claude-write appdata-script radarr cleanup-old.sh'
+# v13: separator check is quote/backslash-aware — ; & inside quotes or escaped
+# are literal data, not command separators, and must still pass.
+run_case allow 'curl "https://example.com/?a=1&b=2"'   # & inside double quotes (query string)
+run_case allow 'grep "a;b" /etc/hosts'                 # ; inside double quotes (literal pattern)
+run_case allow "grep 'a & b' /etc/hosts"               # & inside single quotes
+run_case allow 'find /mnt \( -name a -o -name b \)'    # escaped parens, no separator
 
 # ---------------- BLOCK cases ----------------
 run_case block 'rm /tmp/x'
@@ -131,6 +141,19 @@ run_case block 'chown root file'
 run_case block 'ls; rm /tmp/x'
 run_case block 'ls && rm /tmp/x'
 run_case block 'ls || rm /tmp/x'
+# v13 regression: command-separator forms the pre-v13 regex denylist MISSED.
+# Each ran an arbitrary second command under the final `bash -c` while the
+# per-segment allowlist only ever saw the benign first token.
+run_case block 'ls ;rm /tmp/x'                  # semicolon, no trailing space
+run_case block 'ls ;env'                         # semicolon -> disallowed cmd
+run_case block 'ls & rm /tmp/x'                  # bare & (background) separator
+run_case block 'ls&rm /tmp/x'                    # & with no surrounding spaces
+run_case block 'cat /etc/hostname & env'         # & -> disallowed cmd
+run_case block 'ls /mnt | grep x ;env'           # separator after a pipe segment
+run_case block "$(printf 'ls /mnt\nrm /tmp/x')"  # embedded newline separator
+run_case block "$(printf 'ls /mnt\nls /etc')"    # newline separator, BOTH sides allowed
+                                                 # (proves the separator itself is blocked,
+                                                 #  not just a disallowed 2nd command)
 run_case block 'cat $(echo /etc)'
 run_case block 'cat `echo /etc`'
 run_case block 'find /mnt -delete'
@@ -152,6 +175,13 @@ run_case block 'dmesg --read-clear'
 run_case block 'dmesg -n 1'
 run_case block 'dmesg -E'
 run_case block 'dmesg -D'
+# v14 dmesg: GTFOBins read-escape / nuisance flags now blocked
+run_case block 'dmesg -F /etc/passwd'     # read arbitrary file via dmesg
+run_case block 'dmesg --file=/etc/passwd'
+run_case block 'dmesg -w'                  # follow — never returns, hangs session
+run_case block 'dmesg --follow'
+run_case block 'dmesg -W'                  # follow-new
+run_case block 'dmesg -H'                  # pager invoke
 run_case block 'find /mnt | xargs rm'
 run_case block 'find /mnt | xargs sh'
 run_case block 'cat <(echo hi)'

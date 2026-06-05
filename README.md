@@ -33,9 +33,12 @@ Two enforcement layers, both required to write anything:
   `command="..."` forces every login through `/home/<user>/shell-filter.sh`.
   It runs noglob, parses the argv against an allowlist of ~40 read
   commands plus the `claude-write` deploy grammar, and rejects everything
-  else with a structured `BLOCKED` log entry. Shell chaining (`;`, `&&`,
-  `||`), command substitution (`$(...)`, backticks), process substitution
-  (`<(...)` / `>(...)`), and arbitrary file redirects are all blocked.
+  else with a structured `BLOCKED` log entry. Shell chaining and
+  backgrounding (`;`, `&`, `&&`, `||`, embedded newlines), command
+  substitution (`$(...)`, backticks), process substitution (`<(...)` /
+  `>(...)`), and arbitrary file redirects are all blocked. The separator
+  check is quote- and backslash-aware, so `;`/`&` inside quotes (e.g. a
+  query string in `curl "…?a=1&b=2"`) are treated as literal data.
 - **Privileged writer** (enforcement). `claude-write` invocations pass
   through `sudo` with an argv-pinned NOPASSWD rule, then re-validate
   everything the filter checked (category, target name, basename /

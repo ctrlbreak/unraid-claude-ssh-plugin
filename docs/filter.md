@@ -135,7 +135,7 @@ flag restrictions.
 | `which` | Locate a binary on `PATH` (the name is an argument, never executed) | none |
 | `iostat` | CPU / device I/O statistics (needs the `sysstat` package; harmless if absent) | none |
 | `smbstatus` | Active SMB sessions, shares, locks | none |
-| `dmesg` | Kernel ring buffer | **read-only — `-C`/`-c`/`-D`/`-E`/`-n` and `--clear`/`--read-clear`/`--console-*` (buffer & console mutators) blocked** |
+| `dmesg` | Kernel ring buffer | **read-only — buffer/console mutators (`-C`/`-c`/`-D`/`-E`/`-n`, `--clear`/`--read-clear`/`--console-*`) blocked; also `-F`/`--file` (reads an arbitrary file), `-w`/`-W`/`--follow` (hangs the session), `-H`/`--human` (pager) blocked. Plain reads (`dmesg`, `-T`, `-x`, `-e`, `-f`, `\| grep …`) pass.** |
 
 ### Network (read-only)
 
@@ -218,9 +218,19 @@ each validated independently.
 
 ### Shell chaining is blocked
 
-`;`, `&&`, `||` between commands → rejected. The filter doesn't try to
-parse "what's the next command after `;`"; it just refuses to allow the
-construct. Use a single pipeline or call separately.
+`;`, `&` (background), `&&`, `||`, and embedded newlines between commands
+→ rejected. The filter doesn't try to parse "what's the next command after
+`;`"; it just refuses to allow the construct. Use a single pipeline or call
+separately.
+
+The check is quote- and backslash-aware (it uses the same single/double
+quote model as the pipe splitter), so a `;` or `&` that is quoted or
+backslash-escaped is treated as literal argument data, not a separator —
+`curl "https://h/?a=1&b=2"`, `grep "a;b" file`, and `find . \( -name x \)`
+all pass. Only a separator bash would actually act on is blocked. (Before
+v13 the check was a regex that only caught `;` followed by whitespace,
+`&&`, and `||`, so `ls ;rm`, `ls & rm`, and newline-separated commands
+slipped through; v13 closed that.)
 
 ### Command substitution is blocked
 

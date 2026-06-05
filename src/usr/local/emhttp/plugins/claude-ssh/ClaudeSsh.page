@@ -5,6 +5,11 @@ Tag="key"
 ---
 <?php
 $plugin = 'claude-ssh';
+// CSRF token for the allowlist save POST. Read from the SAME shared helper
+// exec.php validates against (include/csrf.php), so the emitted token always
+// matches the expected one regardless of whether emhttp populated $var here.
+require_once '/usr/local/emhttp/plugins/claude-ssh/include/csrf.php';
+$cs_csrf = function_exists('cs_csrf_token') ? cs_csrf_token() : '';
 ?>
 
 <style>
@@ -239,6 +244,9 @@ table.cs-table tr.cs-row-missing { background: #fdecec; }
 (function() {
   var plugin = '<?=$plugin?>';
   var endpoint = '/plugins/' + plugin + '/include/exec.php';
+  // Unraid CSRF token for state-changing POSTs (save_allowlist), rendered from
+  // the shared cs_csrf_token() helper (same source exec.php validates against).
+  var csrfToken = <?=json_encode($cs_csrf)?>;
   var pollHandle = null;
 
   function byId(id) { return document.getElementById(id); }
@@ -376,6 +384,7 @@ table.cs-table tr.cs-row-missing { background: #fdecec; }
     setAllowStatus('info', 'Saving...');
     $.post(endpoint, {
       action:     'save_allowlist',
+      csrf_token: csrfToken,
       plugins:    byId('cs-allow-plugins').value,
       containers: byId('cs-allow-containers').value,
     }, function(data) {

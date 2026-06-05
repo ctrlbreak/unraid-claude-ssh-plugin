@@ -169,22 +169,38 @@ enforces lockstep between them.
 
 ### Load-bearing assumption: target-dir perms
 
-The atomic-write step (`mv -f $TMP_DEST $DEST`) follows symlinks. The writer
-relies on the **target directory** being root-owned and not writable by the
-constrained SSH user, so the user can't plant a redirecting symlink at the
-destination basename and have the writer follow it into `/etc/...` or
-`/root/...`.
+The writer runs as root, so it must never follow a symlink out of the
+category's target tree. Since writer `v9` it actively guards against this:
+
+- It **refuses a symlink at the destination** basename (so a planted
+  `foo.sh -> /etc/cron.d/x` is rejected before the backup-read or the write).
+- It **refuses a symlink at the target-directory leaf** (re-checked after
+  `mkdir -p`), so a `scripts -> /etc` swap can't redirect the write.
+- It writes through an **unpredictable `mktemp` name** created inside the
+  target dir, closing the older predictable-temp-name vector (an attacker
+  could previously pre-plant a symlink at `<dest>.claude-write.<ts>.tmp`).
+
+This is defence-in-depth on top of the dir-ownership assumption — the writer
+still relies on the **target directory's ancestry** being controlled by root
+/ the admin, not the constrained SSH user:
 
 - `/usr/local/emhttp/plugins/<plugin>/` directories are root-owned 755 by
-  Unraid; the SSH user is in `users`, not root.
-- `/mnt/user/appdata/<container>/scripts/` is normally root-owned;
-  containers don't expose write access to the host's SSH user.
+  Unraid; the SSH user is in `users`, not root. No ancestor is a symlink.
+- `/mnt/user/appdata/<container>/scripts/` is often container-owned and
+  group-writable — which is exactly why the destination / leaf symlink
+  guards above matter. **Residual:** the guards do not walk the full
+  ancestry (walking to `/` would false-reject exotic layouts and is brittle
+  across the `/mnt/user` FUSE mount), so an attacker who can write to the
+  appdata *share root* could still replace a not-yet-created allowlisted
+  `<container>` dir with a symlink. Existing allowlisted container dirs are
+  real and not trivially replaceable; don't allowlist a container whose
+  appdata parent is writable by the SSH user.
 - `/tmp/claude-scratch/` is created by the writer (root-owned).
 
-If a future change loosens those dir perms (or a plugin install creates
-sub-directories with permissive ownership) the symlink-following assumption
-breaks. The category model is convention-enforcement on top of the plugin
-allowlist; **the plugin allowlist is the real blast-radius boundary**.
+A fully TOCTOU-proof writer would need `openat2(RESOLVE_NO_SYMLINKS)`, which
+isn't reachable from a shell writer. The category model is
+convention-enforcement on top of the plugin allowlist; **the plugin allowlist
+is the real blast-radius boundary**.
 
 ## What to do before granting your first SSH key
 

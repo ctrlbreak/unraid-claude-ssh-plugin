@@ -382,6 +382,58 @@ b_case "scratch-yaml"        "accept:644:$SANDBOX/scratch/conf.yaml"        "a: 
 b_case "scratch-yml"         "accept:644:$SANDBOX/scratch/conf.yml"         "a: 1" scratch conf.yml
 b_case "appdata-sh"          "accept:755:$SANDBOX/appdata/sonarr/scripts/foo.sh" "#!/bin/sh" appdata-script sonarr foo.sh
 
+# --- v9 symlink guard: a root-owned write must never follow a planted link ---
+# Realistic vector: appdata-script writes to a container-owned (group-writable)
+# scripts dir, so the constrained user could plant a symlink at the destination
+# basename or as the scripts dir itself and redirect the root write outside the
+# allowlist. Assert the writer rejects, AND that the escape target stays empty.
+EVIL="$SANDBOX/EVIL-escape-target"
+
+sym_reject() {
+    local label="$1" must_stay_empty="$2"; shift 2
+    local out rc
+    out=$(printf '%s' "evil-content" | bash "$PRIV_TMP" "$@" 2>&1)
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+        BFAIL=$((BFAIL + 1)); BFAILED+=("$label: expected reject, got accept (argv: $*; out: $out)")
+    elif ! printf '%s' "$out" | grep -q 'symlink'; then
+        BFAIL=$((BFAIL + 1)); BFAILED+=("$label: rejected but not for symlink reason (out: $out)")
+    elif [ -n "$must_stay_empty" ] && [ -s "$must_stay_empty" ]; then
+        BFAIL=$((BFAIL + 1)); BFAILED+=("$label: ESCAPE — content written through symlink to $must_stay_empty")
+    else
+        BPASS=$((BPASS + 1))
+    fi
+}
+
+# (1) symlink AT the destination basename → /etc-style escape target.
+: > "$EVIL"
+rm -rf "$SANDBOX/appdata/sonarr"
+mkdir -p "$SANDBOX/appdata/sonarr/scripts"
+ln -s "$EVIL" "$SANDBOX/appdata/sonarr/scripts/pwn.sh"
+sym_reject "sym-dest-appdata" "$EVIL" appdata-script sonarr pwn.sh
+
+# (2) symlink AT the destination basename, plugin-file category.
+: > "$EVIL"
+rm -rf "$SANDBOX/emhttp/plugins/verify-test"
+mkdir -p "$SANDBOX/emhttp/plugins/verify-test"
+ln -s "$EVIL" "$SANDBOX/emhttp/plugins/verify-test/evil.php"
+sym_reject "sym-dest-plugin" "$EVIL" plugin-file verify-test evil.php
+
+# (3) symlink AS the target (scripts) dir → mktemp+write would land in the
+# symlink target without the post-mkdir leaf check.
+rm -rf "$SANDBOX/appdata/sonarr" "$SANDBOX/decoy-dir"
+mkdir -p "$SANDBOX/appdata/sonarr" "$SANDBOX/decoy-dir"
+ln -s "$SANDBOX/decoy-dir" "$SANDBOX/appdata/sonarr/scripts"
+sym_reject "sym-targetdir" "" appdata-script sonarr ok.sh
+if [ -e "$SANDBOX/decoy-dir/ok.sh" ]; then
+    BFAIL=$((BFAIL + 1)); BFAILED+=("sym-targetdir: ESCAPE — wrote into symlinked target dir")
+fi
+
+# (4) after the guards, a clean write still succeeds (proves the mktemp atomic
+# write path works end-to-end with no planted links).
+rm -rf "$SANDBOX/appdata/sonarr"
+b_case "appdata-clean-after" "accept:755:$SANDBOX/appdata/sonarr/scripts/clean.sh" "#!/bin/sh" appdata-script sonarr clean.sh
+
 echo "  behavioural cases: $BPASS passed / $BFAIL failed"
 if [ "$BFAIL" -ne 0 ]; then
     for f in "${BFAILED[@]}"; do echo "  - $f"; done

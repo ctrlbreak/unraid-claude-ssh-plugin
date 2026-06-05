@@ -8,6 +8,39 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.06.05b — 2026-06-05
+
+- **Security fix (filter `v14`): SSH command-separator bypass closed.** The
+  filter's chaining check was a regex denylist that only caught `;` followed
+  by whitespace, `&&`, and `||`. It missed `;` with no trailing space
+  (`ls ;rm`), a bare `&` background operator (`ls & rm`), and embedded
+  newlines — all of which bash honours as command separators. Because the
+  filter validates a tokenised approximation but executes the raw command via
+  `bash -c`, those forms ran an arbitrary second command (as the constrained
+  user) while the per-segment allowlist only inspected the benign first token.
+  This defeated the read-only containment for any SSH-key holder.
+- **Fix:** the separator check is now a quote- and backslash-aware scanner
+  that flags `;`, `&`, newline (and `||`) only when bash would act on them.
+  Quoted or escaped forms stay allowed — `curl "https://h/?a=1&b=2"`,
+  `grep "a;b" file`, `find . \( -name x \)`. A single `|` remains the
+  pipeline separator (each segment is allowlist-checked).
+- **Hardening (filter `v14`): tighter `dmesg` flag guard.** Beyond the
+  buffer/console mutators already blocked, `dmesg` now also rejects `-F`/
+  `--file` (reads an arbitrary file via dmesg), `-w`/`-W`/`--follow` (never
+  returns — hangs the session), and `-H`/`--human` (invokes a pager). Plain
+  reads (`dmesg`, `-T`, `-x`, `-e`, `-f`, `| grep ...`) still pass.
+- **Hardening (writer `v9`): symlink-safe writes.** The privileged writer no
+  longer follows a symlink planted at the destination or used as the target
+  directory, and it now writes through an unpredictable `mktemp` name (the old
+  predictable temp name was a symlink-follow vector). This matters most for the
+  `appdata-script` category, whose target dir can be container-owned and
+  group-writable. Defence-in-depth on top of the target-dir-ownership
+  assumption documented in the threat model.
+- **Hardening: CSRF token on the allowlist save.** The Settings page's
+  "Save allowlist" action (which controls the SSH write blast radius) now
+  requires Unraid's per-session `csrf_token`, so it can't be driven
+  cross-site from a logged-in admin's browser. Read-only views are unchanged.
+
 ## 2026.06.05a — 2026-06-05
 
 - **Filter `v12`: a few read-only diagnostics are now allowed.** `which`

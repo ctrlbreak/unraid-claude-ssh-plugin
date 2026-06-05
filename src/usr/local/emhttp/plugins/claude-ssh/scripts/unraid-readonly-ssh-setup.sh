@@ -23,7 +23,7 @@ set -euo pipefail
 # to /home/<user>/shell-filter.sh). Setup-script edits outside the heredoc
 # don't bump this. Read by exec.php (readVersionMarker), used by the install
 # banner below, asserted by tests/test-versions.sh.
-FILTER_VERSION="v12"
+FILTER_VERSION="v14"
 
 # --- Resolve SSH username (configurable, setup-time only) ----------------
 # Precedence: CLAUDE_SSH_USERNAME env var > /boot/config/plugins/claude-ssh/
@@ -147,6 +147,25 @@ cat > "$FILTER_SCRIPT" << 'FILTER'
 #                   forms) — read-only only. `command` was deliberately NOT
 #                   added: `command rm` runs rm, so it would bypass the
 #                   per-segment allowlist; `which` covers the real need.
+# v14 — 2026-06-05: Harden the dmesg flag guard (GTFOBins). The v12 guard
+#                   only blocked buffer/console mutators; -F/--file (read an
+#                   arbitrary file via dmesg), -w/-W/--follow (never returns,
+#                   hangs the session) and -H/--human (pager) slipped through.
+#                   Added to the deny set. Same denylist shape — see the dmesg
+#                   case for the read flags deliberately kept allowed.
+# v13 — 2026-06-05: Fix command-separator bypass. The v2-v12 chaining check
+#                   was a regex denylist (`;<space>`, `;<eol>`, `&&`, `||`)
+#                   that missed `;` with no trailing space (`ls ;rm`), a bare
+#                   `&` background operator (`ls & rm`), and embedded newlines
+#                   — all of which bash honours as command separators, so a
+#                   second arbitrary command ran under the final `bash -c`
+#                   while the per-segment allowlist only ever saw the benign
+#                   first token. Replaced with a quote- and backslash-aware
+#                   scanner that flags ; & newline (and `||`) only when bash
+#                   would actually act on them; quoted/escaped forms such as
+#                   `curl "h?a=1&b=2"`, `grep "A\|B" f` and `find . \( … \)`
+#                   stay allowed. `|` is still the segment separator (validated
+#                   per-segment). No writer change (still v8).
 # =============================================================================
 
 # Disable filename globbing during validation. Filter logic uses unquoted
@@ -227,9 +246,37 @@ fi
 # Strip valid scratch redirects so they pass the next check.
 SANITIZED=$(echo "$SANITIZED" | sed -E 's#&?>[>]?[[:space:]]*/tmp/claude-[a-zA-Z0-9._-]+(/[a-zA-Z0-9._-]+)*##g')
 
-# --- Block shell metacharacters (on sanitized command) ---
-if echo "$SANITIZED" | grep -qE ';[[:space:]]|;[[:space:]]*$|&&|\|\|'; then
-    log_block "shell chaining (; && ||) is not allowed"
+# --- Block command separators (quote- and backslash-aware) ---
+# bash honours ; & newline (and && ||) as command terminators/backgrounders.
+# The pre-v13 regex only caught `;<space>`, `;<eol>`, `&&` and `||`, so
+# `ls ;rm`, `ls & rm` and embedded newlines slipped through and ran as a second
+# command under the final `bash -c` — the per-segment allowlist only ever saw
+# the benign first token (`ls`). Scan with the SAME quote model as the pipe
+# splitter below (single quotes literal; double quotes honour backslash) so a
+# separator is flagged only when bash would actually act on it: quoted/escaped
+# forms like `curl "http://h/?a=1&b=2"`, `grep "A\|B" f` and `find . \( -name x \)`
+# stay allowed. A single `|` is NOT flagged here — it is the legitimate segment
+# separator and each segment is allowlist-checked below; `||` IS flagged.
+if awk 'BEGIN {
+    cmd = ARGV[1]; ARGV[1] = ""
+    n = length(cmd); st = "U"            # U=unquoted  S=single-quoted  D=double-quoted
+    for (i = 1; i <= n; i++) {
+        c = substr(cmd, i, 1)
+        if (st == "S") { if (c == "\047") st = "U"; continue }
+        if (st == "D") {
+            if (c == "\\") { i++; continue }       # backslash escapes next char inside ""
+            if (c == "\"") st = "U"
+            continue
+        }
+        if (c == "\\")   { i++; continue }         # escaped char is literal when unquoted
+        if (c == "\047") { st = "S"; continue }
+        if (c == "\"")   { st = "D"; continue }
+        if (c == ";" || c == "&" || c == "\n") exit 0
+        if (c == "|" && substr(cmd, i + 1, 1) == "|") exit 0
+    }
+    exit 1
+}' "$SANITIZED"; then
+    log_block "shell chaining (; & newline && ||) outside quotes is not allowed"
 fi
 if echo "$SANITIZED" | grep -qE '`|\$\('; then
     log_block "command substitution (\$(), backticks) is not allowed"
@@ -346,13 +393,16 @@ for segment in "${SEGMENTS[@]}"; do
             fi
             ;;
         dmesg)
-            # Read-only only. Block the buffer/console mutators: -C/--clear,
-            # -c/--read-clear, -D/--console-off, -E/--console-on, -n/--console-level.
-            # The short-cluster form catches the mutating letter anywhere in a
-            # -Tx-style group — no READ-only dmesg short flag contains C/c/D/E/n,
-            # so this won't over-block plain reads like -T/-x/-d/-e/-l/-w.
-            if echo "$segment" | grep -qE '(\s|^)-[a-zA-Z]*[CcDEn]|--(clear|read-clear|console-off|console-on|console-level)\b'; then
-                log_block "dmesg buffer/console mutation flags not allowed (read-only)"
+            # Read-only only. Block buffer/console mutators (-C/--clear,
+            # -c/--read-clear, -D/--console-off, -E/--console-on, -n/--console-level)
+            # plus the GTFOBins read-escape / nuisance flags added in v14:
+            # -F/--file (read an ARBITRARY file via dmesg), -w/-W/--follow (never
+            # returns — hangs the SSH session), -H/--human (invokes a pager).
+            # The short-cluster form catches the dangerous letter anywhere in a
+            # -Tx-style group; matching is case-sensitive, so the read flags
+            # -e/-f/-h/-d/-x/-T/-l/-r/-P stay allowed.
+            if echo "$segment" | grep -qE '(\s|^)-[a-zA-Z]*[CcDEnFHwW]|--(clear|read-clear|console-off|console-on|console-level|file|follow|human)\b'; then
+                log_block "dmesg mutation/file/follow/pager flags not allowed (read-only, non-blocking)"
             fi
             ;;
         claude-write)
