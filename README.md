@@ -31,7 +31,7 @@ Two enforcement layers, both required to write anything:
 
 - **SSH-layer filter** (advisory, fast). The constrained user's
   `command="..."` forces every login through `/home/<user>/shell-filter.sh`.
-  It runs noglob, parses the argv against an allowlist of ~35 read
+  It runs noglob, parses the argv against an allowlist of ~40 read
   commands plus the `claude-write` deploy grammar, and rejects everything
   else with a structured `BLOCKED` log entry. Shell chaining (`;`, `&&`,
   `||`), command substitution (`$(...)`, backticks), process substitution

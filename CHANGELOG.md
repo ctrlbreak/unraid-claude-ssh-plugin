@@ -8,6 +8,23 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.06.05a — 2026-06-05
+
+- **Filter `v12`: a few read-only diagnostics are now allowed.** `which`
+  (locate a binary), `iostat` and `smbstatus` (read-only stats), and
+  `dmesg` (kernel ring buffer) join the SSH command allowlist. These were
+  common, legitimate read-only commands that previously tripped
+  `command not in allowlist`.
+- **`dmesg` is read-only.** The buffer/console mutators (`-C`/`-c`/`-D`/
+  `-E`/`-n` and `--clear`/`--read-clear`/`--console-*`) are blocked; plain
+  reads (`dmesg`, `dmesg -T`, `dmesg | grep ...`) pass.
+- `command` was deliberately NOT added: `command rm` would run `rm`, so
+  allowing it as a command name would bypass the per-segment allowlist.
+  `which` covers the actual need.
+- `iostat` ships in the `sysstat` package, which may not be installed on a
+  stock system; the allowlist entry is harmless if the binary is absent.
+- Writer unchanged (`v8`).
+
 ## 2026.06.01a — 2026-06-01
 
 - **Fix: SSH public key now survives a reboot.** Unraid rebuilds `/home`

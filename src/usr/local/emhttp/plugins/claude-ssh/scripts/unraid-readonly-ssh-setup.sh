@@ -23,7 +23,7 @@ set -euo pipefail
 # to /home/<user>/shell-filter.sh). Setup-script edits outside the heredoc
 # don't bump this. Read by exec.php (readVersionMarker), used by the install
 # banner below, asserted by tests/test-versions.sh.
-FILTER_VERSION="v11"
+FILTER_VERSION="v12"
 
 # --- Resolve SSH username (configurable, setup-time only) ----------------
 # Precedence: CLAUDE_SSH_USERNAME env var > /boot/config/plugins/claude-ssh/
@@ -140,6 +140,13 @@ cat > "$FILTER_SCRIPT" << 'FILTER'
 #                   mode mapping are enforced by the privileged writer.
 #                   BREAKING for direct claude-write callers: old plugin-*
 #                   category names are no longer accepted.
+# v12 — 2026-06-05: Add read-only diagnostics to the allowlist — which (binary
+#                   lookup), iostat / smbstatus (read-only stats), dmesg
+#                   (kernel ring buffer). dmesg gets a flag guard blocking the
+#                   buffer/console mutators (-C/-c/-D/-E/-n and their long
+#                   forms) — read-only only. `command` was deliberately NOT
+#                   added: `command rm` runs rm, so it would bypass the
+#                   per-segment allowlist; `which` covers the real need.
 # =============================================================================
 
 # Disable filename globbing during validation. Filter logic uses unquoted
@@ -166,7 +173,7 @@ log_block() {
 }
 
 # Allowed commands (read-only operations + the carve-outs documented above)
-ALLOWED="ls find stat file tree readlink realpath basename dirname cat head tail wc md5sum sha256sum grep awk sed sort uniq cut tr diff comm df du uname uptime hostname date id whoami ps curl echo printf jq numfmt mkdir ln xargs zcat tar getent groups last who claude-write"
+ALLOWED="ls find stat file tree readlink realpath basename dirname cat head tail wc md5sum sha256sum grep awk sed sort uniq cut tr diff comm df du uname uptime hostname date id whoami ps curl echo printf jq numfmt mkdir ln xargs zcat tar getent groups last who which iostat smbstatus dmesg claude-write"
 
 # Sub-allowlist: which commands xargs is allowed to invoke (xargs spawns its child
 # directly, bypassing the filter, so we have to constrain it here).
@@ -336,6 +343,16 @@ for segment in "${SEGMENTS[@]}"; do
             fi
             if ! echo "$segment" | grep -qE '(\s|^)-[a-zA-Z]*t|--list\b'; then
                 log_block "tar requires -t (list mode only)"
+            fi
+            ;;
+        dmesg)
+            # Read-only only. Block the buffer/console mutators: -C/--clear,
+            # -c/--read-clear, -D/--console-off, -E/--console-on, -n/--console-level.
+            # The short-cluster form catches the mutating letter anywhere in a
+            # -Tx-style group — no READ-only dmesg short flag contains C/c/D/E/n,
+            # so this won't over-block plain reads like -T/-x/-d/-e/-l/-w.
+            if echo "$segment" | grep -qE '(\s|^)-[a-zA-Z]*[CcDEn]|--(clear|read-clear|console-off|console-on|console-level)\b'; then
+                log_block "dmesg buffer/console mutation flags not allowed (read-only)"
             fi
             ;;
         claude-write)

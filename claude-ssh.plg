@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.06.01a">
+  <!ENTITY version   "2026.06.05a">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,22 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" icon="key">
 
 <CHANGES>
+###2026.06.05a
+- **Filter `v12`: a few read-only diagnostics are now allowed.** `which`
+  (locate a binary), `iostat` and `smbstatus` (read-only stats), and
+  `dmesg` (kernel ring buffer) join the SSH command allowlist. These were
+  common, legitimate read-only commands that previously tripped
+  `command not in allowlist`.
+- **`dmesg` is read-only.** The buffer/console mutators (`-C`/`-c`/`-D`/
+  `-E`/`-n` and `--clear`/`--read-clear`/`--console-*`) are blocked; plain
+  reads (`dmesg`, `dmesg -T`, `dmesg | grep ...`) pass.
+- `command` was deliberately NOT added: `command rm` would run `rm`, so
+  allowing it as a command name would bypass the per-segment allowlist.
+  `which` covers the actual need.
+- `iostat` ships in the `sysstat` package, which may not be installed on a
+  stock system; the allowlist entry is harmless if the binary is absent.
+- Writer unchanged (`v8`).
+
 ###2026.06.01a
 - **Fix: SSH public key now survives a reboot.** Unraid rebuilds `/home`
   from RAM on every boot, and earlier versions only ever wrote the pubkey

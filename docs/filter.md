@@ -132,6 +132,10 @@ flag restrictions.
 | `groups` | Group membership for a user | none |
 | `last` | Login history from `/var/log/wtmp` | none |
 | `who` | Currently logged-in users | none |
+| `which` | Locate a binary on `PATH` (the name is an argument, never executed) | none |
+| `iostat` | CPU / device I/O statistics (needs the `sysstat` package; harmless if absent) | none |
+| `smbstatus` | Active SMB sessions, shares, locks | none |
+| `dmesg` | Kernel ring buffer | **read-only — `-C`/`-c`/`-D`/`-E`/`-n` and `--clear`/`--read-clear`/`--console-*` (buffer & console mutators) blocked** |
 
 ### Network (read-only)
 
