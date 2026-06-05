@@ -455,6 +455,38 @@ else
     record_fail "2.10" "curl POST not blocked" "$filter_hint_block" "$filter_doc_anchor"
 fi
 
+# 2.11-2.14 allowed (filter v12 read-only diagnostics). Assert the filter did
+# NOT block the command name — NOT exit 0 — because the binary may be absent
+# (iostat ships in sysstat) or exit non-zero on perms (dmesg/smbstatus), and
+# neither of those means the filter rejected it. A BLOCKED on stderr is the
+# only filter-level rejection signal.
+filter_hint_v12="filter blocked a v12 read-only diagnostic that should be allowed — bigboi may still be running filter v11 (reinstall the plugin / re-run install-runtime.sh as root)"
+
+for diag in "which bash" "iostat" "smbstatus" "dmesg"; do
+    case "$diag" in
+        "which bash") id="2.11" ;;
+        "iostat")     id="2.12" ;;
+        "smbstatus")  id="2.13" ;;
+        "dmesg")      id="2.14" ;;
+    esac
+    out=$(ssh_claude "$diag" 2>&1 || true)
+    if printf '%s' "$out" | grep -q 'BLOCKED'; then
+        record_fail "$id" "allowed (v12) '$diag' was blocked by filter (got: $(printf '%s' "$out" | head -1))" \
+            "$filter_hint_v12" "$filter_doc_anchor"
+    else
+        record_pass "$id" "allowed (v12): $diag"
+    fi
+done
+
+# 2.15 blocked (v12): dmesg ring-buffer mutator. Proves the dmesg flag guard is
+# live — without it, adding dmesg to the allowlist would permit `dmesg -C`.
+out=$(ssh_claude "dmesg -C" 2>&1 || true)
+if printf '%s' "$out" | grep -q 'BLOCKED'; then
+    record_pass "2.15" "blocked: dmesg -C (buffer mutator)"
+else
+    record_fail "2.15" "dmesg -C not blocked — flag guard missing (got: $out)" "$filter_hint_block" "$filter_doc_anchor"
+fi
+
 # ===========================================================================
 # Layer 3 — Writer behaviour (constrained-user SSH via claude-write)
 # ===========================================================================
