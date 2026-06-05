@@ -8,6 +8,14 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.06.05c — 2026-06-05
+
+- No functional change from `2026.06.05b` (same filter `v14`, writer `v9`).
+  The plugin version is bumped only so the Unraid plugin manager detects and
+  offers the `2026.06.05b` security release as an update (a dev build of
+  `2026.06.05b` had been installed directly during testing, so the manager
+  saw no version change). Install this to get all the `2026.06.05b` fixes.
+
 ## 2026.06.05b — 2026-06-05
 
 - **Security fix (filter `v14`): SSH command-separator bypass closed.** The

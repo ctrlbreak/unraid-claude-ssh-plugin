@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.06.05b">
+  <!ENTITY version   "2026.06.05c">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,12 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" icon="key">
 
 <CHANGES>
+###2026.06.05c
+- No functional change from `2026.06.05b` (same filter `v14`, writer `v9`).
+  The plugin version is bumped only so the Unraid plugin manager detects and
+  offers the `2026.06.05b` security release as an update. Install this to get
+  all of the `2026.06.05b` security fixes listed below.
+
 ###2026.06.05b
 - **Security fix (filter `v14`): SSH command-separator bypass closed.** The
   filter's chaining check was a regex denylist that only caught `;` followed
