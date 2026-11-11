@@ -19,6 +19,7 @@ TESTS=(
     test-dashboard-action.sh
     test-username-configurable.sh
     test-key-persistence.sh
+    test-user-home-heal.sh
     test-idempotency.sh
     test-migration.sh
     test-upgrade-path.sh

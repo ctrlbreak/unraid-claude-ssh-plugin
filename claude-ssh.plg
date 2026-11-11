@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "claude-ssh">
   <!ENTITY author    "Patrick">
-  <!ENTITY version   "2026.06.05c">
+  <!ENTITY version   "2026.11.11a">
   <!ENTITY pluginURL "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/latest/download/&name;.plg">
   <!ENTITY pkgURL    "/boot/config/plugins/&name;/&name;.txz">
   <!ENTITY pkgRemote "https://github.com/ctrlbreak/unraid-claude-ssh-plugin/releases/download/v&version;/&name;.txz">
@@ -15,6 +15,19 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" icon="key">
 
 <CHANGES>
+###2026.11.11a
+- **Fix: plugin no longer fails to start after a reboot once Unraid has saved
+  the SSH user to flash.** Unraid restores such an account at boot with home
+  `/`, shell `/bin/false`, and a primary group ID that has no group entry, and
+  `/home` is empty after every boot. Setup only created the home directory for
+  a brand-new user, so on these boots it stopped at the filter write and the
+  filter, keys, sshd config and `claude-write` were never installed (the
+  dashboard tile showed "Not installed"). Setup now repairs the existing
+  account in place on every run: home set to `/home/&lt;user&gt;`, shell to
+  `/bin/bash`, primary group to `users` when its group is missing, and the
+  home directory created, owned by the user, mode 755. The user and its UID
+  are kept. Filter (`v14`) and writer (`v9`) are unchanged.
+
 ###2026.06.05c
 - No functional change from `2026.06.05b` (same filter `v14`, writer `v9`).
   The plugin version is bumped only so the Unraid plugin manager detects and

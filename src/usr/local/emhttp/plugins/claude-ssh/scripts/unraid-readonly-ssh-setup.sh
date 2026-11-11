@@ -78,6 +78,33 @@ else
     echo "Created user '$USERNAME'."
 fi
 
+# Repair an account Unraid restored from flash. Once Unraid has saved the
+# account to /boot/config/passwd it restores it at boot in its own normalised
+# shape: home "/", shell /bin/false, and a primary GID whose group entry is not
+# persisted. /home is RAM-backed, so the home directory is gone as well. Each
+# of these alone breaks the SSH login. Repair in place rather than deleting and
+# recreating the user: a recreated user can get a new UID, which would change
+# the ownership of its scratch files.
+IFS=: read -r _ _ _ CS_GID _ CS_HOME CS_SHELL < <(getent passwd "$USERNAME")
+if [ "$CS_HOME" != "$HOME_DIR" ]; then
+    # Never -m: it would move the old home, which here is "/".
+    usermod -d "$HOME_DIR" "$USERNAME"
+    echo "Repaired $USERNAME home: '$CS_HOME' -> $HOME_DIR."
+fi
+if [ "$CS_SHELL" != "/bin/bash" ]; then
+    usermod -s /bin/bash "$USERNAME"
+    echo "Repaired $USERNAME shell: '$CS_SHELL' -> /bin/bash."
+fi
+if ! getent group "$CS_GID" >/dev/null; then
+    usermod -g users "$USERNAME"
+    echo "Repaired $USERNAME primary group: GID $CS_GID has no group entry -> users."
+fi
+# Explicit 755 on every run: root's umask on some installs leaves the home 777,
+# and sshd's StrictModes refuses key auth for a group/world-writable home.
+[ -d "$HOME_DIR" ] || mkdir -p "$HOME_DIR"
+chown "$USERNAME:users" "$HOME_DIR"
+chmod 755 "$HOME_DIR"
+
 # Add to 'users' group for read access to appdata and shares (owned by nobody:users)
 if ! id -nG "$USERNAME" | grep -qw users; then
     usermod -aG users "$USERNAME"

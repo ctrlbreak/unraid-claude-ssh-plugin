@@ -168,7 +168,8 @@ abort the install with a clear error.
 
 Where the username flows:
 
-- `useradd` / `passwd -l` / `usermod -aG users` (user creation)
+- `useradd` / `passwd -l` / `usermod -aG users` (user creation), and
+  `usermod -d` / `-s` / `-g` when repairing an account Unraid restored at boot
 - `/home/<user>/shell-filter.sh` and `/home/<user>/.ssh/authorized_keys`
 - `AllowUsers <user>` in `/etc/ssh/sshd_config`
 - Sudoers principal in `/etc/sudoers.d/claude-write`

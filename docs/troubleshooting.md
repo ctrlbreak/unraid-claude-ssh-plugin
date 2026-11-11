@@ -145,6 +145,50 @@ sed -i '/^# Claude read-only SSH user setup$/,/^$/d; /^# Claude write deploy cha
 
 Then re-run `install-runtime.sh`.
 
+## Dashboard tile says "Not installed" after a reboot (user present, filter missing)
+
+**Symptom:** after a reboot the dashboard tile shows "Not installed": the SSH
+user exists, but the filter, writer, sudoers rule and SSH keys are all
+missing. Syslog shows `install-runtime.sh starting` and then stops at
+`running unraid-readonly-ssh-setup.sh`. Running the installer by hand prints
+something like:
+
+```
+User 'claude' already exists, skipping creation.
+id: cannot find name for group ID 1003
+.../unraid-readonly-ssh-setup.sh: line 90: /home/claude/shell-filter.sh: No such file or directory
+```
+
+**Cause:** Unraid had saved the SSH user to flash (`/boot/config/passwd`) and
+restored it at boot in its own normalised shape: home `/`, shell
+`/bin/false`, and a primary group ID with no group entry. `/home` is empty
+after every boot. Plugin versions before `2026.11.11a` only created the home
+directory for a brand-new user, so the filter write failed and setup stopped.
+Check the restored entry with:
+
+```bash
+grep "^$(cat /boot/config/plugins/claude-ssh/username):" /etc/passwd
+# broken:   claude:x:1003:1003::/:/bin/false
+# repaired: claude:x:1003:100::/home/claude:/bin/bash
+```
+
+**Fix:** update to `2026.11.11a` or later. Setup then repairs the account in
+place at every boot (home, shell, primary group, and a mode-755 home
+directory) and keeps the user and its UID. To recover an older install for
+one boot, as root:
+
+```bash
+U=$(cat /boot/config/plugins/claude-ssh/username)
+usermod -d "/home/$U" -s /bin/bash -g users "$U"
+mkdir -p "/home/$U" && chown "$U:users" "/home/$U" && chmod 755 "/home/$U"
+bash /usr/local/emhttp/plugins/claude-ssh/scripts/install-runtime.sh
+```
+
+Set mode 755 explicitly. With some root umasks `mkdir` creates the directory
+777, and sshd's StrictModes then refuses key logins even though the tile looks
+healthy. Don't delete and recreate the user to fix this: the UID can change,
+which changes the ownership of the user's scratch files.
+
 ## Status tab: "User claude not ready"
 
 **Symptom:** Health KPI red. Status payload says the user doesn't exist or

@@ -8,6 +8,20 @@ Format: each section is a plugin version. Plugin versions are date-based
 the same day. The filter and writer have independent version markers
 (see [docs/upgrading.md](docs/upgrading.md)).
 
+## 2026.11.11a — 2026-11-11
+
+- **Fix: plugin no longer fails to start after a reboot once Unraid has saved
+  the SSH user to flash.** Unraid restores such an account at boot with home
+  `/`, shell `/bin/false`, and a primary group ID that has no group entry, and
+  `/home` is empty after every boot. Setup only created the home directory for
+  a brand-new user, so on these boots it stopped at the filter write and the
+  filter, keys, sshd config and `claude-write` were never installed (the
+  dashboard tile showed "Not installed"). Setup now repairs the existing
+  account in place on every run: home set to `/home/<user>`, shell to
+  `/bin/bash`, primary group to `users` when its group is missing, and the
+  home directory created, owned by the user, mode 755. The user and its UID
+  are kept. Filter (`v14`) and writer (`v9`) are unchanged.
+
 ## 2026.06.05c — 2026-06-05
 
 - No functional change from `2026.06.05b` (same filter `v14`, writer `v9`).
